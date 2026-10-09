@@ -18,10 +18,10 @@ interface SpreadChartProps {
 export const SpreadChart: React.FC<SpreadChartProps> = ({ spreadHistory = [] }) => {
   if (!spreadHistory || spreadHistory.length === 0) {
     return (
-      <div className="bg-[#0F172A] border border-slate-800 rounded-2xl p-5 shadow-xl h-[300px] flex flex-col items-center justify-center text-center">
-        <p className="text-sm text-slate-400">No simulation data available yet</p>
-        <p className="text-xs text-slate-600 mt-1">
-          Click &ldquo;Simulate Single Spread&rdquo; or run a benchmark to plot rumour progression
+      <div className="glass-panel p-6 rounded-2xl h-[280px] flex flex-col items-center justify-center text-center">
+        <p className="text-sm font-medium text-[#B7A9C9]">No propagation history available</p>
+        <p className="text-xs text-[#756B80] mt-1">
+          Click &ldquo;Simulate Rumour Spread&rdquo; or run a benchmark to plot progression over time.
         </p>
       </div>
     );
@@ -35,12 +35,12 @@ export const SpreadChart: React.FC<SpreadChartProps> = ({ spreadHistory = [] }) 
   }));
 
   return (
-    <div className="bg-[#0F172A] border border-slate-800 rounded-2xl p-5 shadow-xl h-[300px] flex flex-col">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-2">
-        <h3 className="text-sm font-semibold text-slate-200">
-          Propagation Timeline Over Discrete Steps
+    <div className="glass-panel p-5 rounded-2xl h-[300px] flex flex-col space-y-2">
+      <div className="flex items-center justify-between pb-2 border-b border-[#261A33]">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[#F8F3FF]">
+          Propagation Timeline over Time Steps
         </h3>
-        <span className="text-xs text-slate-500 font-mono">
+        <span className="text-[11px] text-[#A855F7] font-mono font-medium">
           {spreadHistory.length} Time Steps
         </span>
       </div>
@@ -50,41 +50,41 @@ export const SpreadChart: React.FC<SpreadChartProps> = ({ spreadHistory = [] }) 
           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="activeGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="#EF4444" stopOpacity={0.05} />
+                <stop offset="5%" stopColor="#FF365E" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="#FF365E" stopOpacity={0.05} />
               </linearGradient>
               <linearGradient id="containedGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10B981" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="#10B981" stopOpacity={0.05} />
+                <stop offset="5%" stopColor="#39F5A5" stopOpacity={0.8} />
+                <stop offset="95%" stopColor="#39F5A5" stopOpacity={0.05} />
               </linearGradient>
               <linearGradient id="unawareGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#64748B" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#64748B" stopOpacity={0.05} />
+                <stop offset="5%" stopColor="#756B80" stopOpacity={0.5} />
+                <stop offset="95%" stopColor="#756B80" stopOpacity={0.05} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#261A33" vertical={false} />
             <XAxis
               dataKey="step"
-              stroke="#64748B"
+              stroke="#756B80"
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: '#261A33' }}
             />
             <YAxis
-              stroke="#64748B"
+              stroke="#756B80"
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: '#261A33' }}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#0F172A',
-                borderColor: '#334155',
-                borderRadius: '8px',
+                backgroundColor: '#120D18',
+                borderColor: '#261A33',
+                borderRadius: '12px',
                 fontSize: '12px',
-                color: '#F8FAFC',
+                color: '#F8F3FF',
               }}
-              itemStyle={{ color: '#F8FAFC' }}
+              itemStyle={{ color: '#F8F3FF' }}
             />
             <Legend
               wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }}
@@ -94,7 +94,7 @@ export const SpreadChart: React.FC<SpreadChartProps> = ({ spreadHistory = [] }) 
               type="monotone"
               dataKey="active"
               name="Active Spreaders"
-              stroke="#EF4444"
+              stroke="#FF365E"
               fillOpacity={1}
               fill="url(#activeGrad)"
               strokeWidth={2}
@@ -102,8 +102,8 @@ export const SpreadChart: React.FC<SpreadChartProps> = ({ spreadHistory = [] }) 
             <Area
               type="monotone"
               dataKey="contained"
-              name="Contained (Guarded)"
-              stroke="#10B981"
+              name="Contained Nodes"
+              stroke="#39F5A5"
               fillOpacity={1}
               fill="url(#containedGrad)"
               strokeWidth={2}
@@ -112,7 +112,7 @@ export const SpreadChart: React.FC<SpreadChartProps> = ({ spreadHistory = [] }) 
               type="monotone"
               dataKey="unaware"
               name="Unaware Users"
-              stroke="#64748B"
+              stroke="#756B80"
               fillOpacity={1}
               fill="url(#unawareGrad)"
               strokeWidth={1.5}
@@ -123,3 +123,5 @@ export const SpreadChart: React.FC<SpreadChartProps> = ({ spreadHistory = [] }) 
     </div>
   );
 };
+
+export default SpreadChart;

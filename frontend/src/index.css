@@ -3,36 +3,60 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   color-scheme: dark;
 }
 
 body {
   margin: 0;
-  background-color: #080C14;
-  color: #F8FAFC;
+  background-color: #08060B;
+  color: #F8F3FF;
   overflow-x: hidden;
 }
 
-code, pre {
-  font-family: 'JetBrains Mono', monospace;
+/* Editorial Brand Typography */
+.font-gossip {
+  font-family: 'Bodoni Moda', 'Playfair Display', serif;
 }
 
-/* Custom scrollbars */
+/* Radial Glow Effects */
+.bg-radial-purple {
+  background-image: radial-gradient(circle at 50% -20%, rgba(168, 85, 247, 0.18) 0%, rgba(8, 6, 11, 0) 70%);
+}
+
+/* Premium Glassmorphism Panels */
+.glass-panel {
+  background: rgba(18, 13, 24, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.18);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.glass-panel-elevated {
+  background: rgba(27, 18, 35, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 20px rgba(168, 85, 247, 0.15);
+}
+
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0F172A;
+  background: #08060B;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 3px;
+  background: #261A33;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #A855F7;
 }
+

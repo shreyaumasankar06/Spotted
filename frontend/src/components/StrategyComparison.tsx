@@ -25,13 +25,12 @@ export const StrategyComparison: React.FC<StrategyComparisonProps> = ({
 }) => {
   if (!comparisonData) {
     return (
-      <div className="bg-[#0F172A] border border-slate-800 rounded-2xl p-6 shadow-xl text-center">
-        <h3 className="text-sm font-semibold text-slate-300">
-          Strategy Benchmark Comparison
+      <div className="glass-panel p-6 rounded-2xl text-center space-y-2">
+        <h3 className="text-xs font-semibold text-[#B7A9C9] uppercase tracking-wider">
+          Containment Strategy Benchmarks
         </h3>
-        <p className="text-xs text-slate-500 mt-2">
-          Run &ldquo;Benchmark All Strategies&rdquo; to test Random, Highest-Degree, and Greedy
-          interventions against baseline.
+        <p className="text-xs text-[#756B80]">
+          Run &ldquo;Evaluate Strategies&rdquo; in the control panel to benchmark Random, Highest-Degree, and Greedy Optimizations.
         </p>
       </div>
     );
@@ -49,64 +48,64 @@ export const StrategyComparison: React.FC<StrategyComparisonProps> = ({
   }));
 
   const getBarColor = (key: string, isBest: boolean) => {
-    if (key === 'none') return '#EF4444';
-    if (isBest) return '#10B981';
-    if (key === 'highest_degree') return '#8B5CF6';
-    return '#64748B';
+    if (key === 'none') return '#FF365E';
+    if (isBest) return '#39F5A5';
+    if (key === 'highest_degree') return '#A855F7';
+    return '#756B80';
   };
 
   return (
-    <div className="bg-[#0F172A] border border-slate-800 rounded-2xl p-5 shadow-xl space-y-5">
+    <div className="glass-panel p-5 rounded-2xl space-y-4">
       {/* Header and Summary */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-slate-800 gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-[#261A33] gap-3">
         <div>
           <div className="flex items-center space-x-2">
-            <h3 className="text-sm font-bold text-slate-200">
-              Strategy Containment Performance
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#F8F3FF]">
+              Containment Performance Benchmarks
             </h3>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1B1223] text-[#A855F7] font-mono border border-[#261A33]">
               {num_runs} trials / strategy
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">{summary}</p>
+          <p className="text-xs text-[#B7A9C9] mt-0.5">{summary}</p>
         </div>
 
-        <div className="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
-          <Award className="w-4 h-4 text-emerald-400" />
-          <span className="text-xs font-semibold text-emerald-300">
-            Top Performer: {best_strategy}
+        <div className="flex items-center space-x-2 bg-[#39F5A5]/10 border border-[#39F5A5]/30 px-3 py-1.5 rounded-xl shadow-[0_0_15px_rgba(57,245,165,0.1)]">
+          <Award className="w-4 h-4 text-[#39F5A5]" />
+          <span className="text-xs font-semibold text-[#39F5A5]">
+            Optimal Strategy: {best_strategy}
           </span>
         </div>
       </div>
 
       {/* Bar Chart: Final Reach Comparison */}
-      <div className="h-[220px] w-full">
-        <div className="text-xs font-medium text-slate-400 mb-2">
+      <div className="h-[200px] w-full">
+        <div className="text-[11px] font-medium text-[#B7A9C9] mb-1.5">
           Average Final Rumour Reach (Lower is better)
         </div>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={barData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#261A33" vertical={false} />
             <XAxis
               dataKey="name"
-              stroke="#64748B"
+              stroke="#756B80"
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: '#261A33' }}
             />
             <YAxis
-              stroke="#64748B"
+              stroke="#756B80"
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: '#334155' }}
+              axisLine={{ stroke: '#261A33' }}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: '#0F172A',
-                borderColor: '#334155',
-                borderRadius: '8px',
+                backgroundColor: '#120D18',
+                borderColor: '#261A33',
+                borderRadius: '12px',
                 fontSize: '12px',
-                color: '#F8FAFC',
+                color: '#F8F3FF',
               }}
               formatter={(value: any) => [
                 `${Number(value).toFixed(2)} users`,
@@ -131,9 +130,9 @@ export const StrategyComparison: React.FC<StrategyComparisonProps> = ({
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="border-b border-slate-800 text-slate-400 font-medium">
+            <tr className="border-b border-[#261A33] text-[#B7A9C9] font-medium">
               <th className="py-2.5 px-3">Strategy</th>
-              <th className="py-2.5 px-3">Selected Users</th>
+              <th className="py-2.5 px-3">Selected Targets</th>
               <th className="py-2.5 px-3 text-right">Avg Reach</th>
               <th className="py-2.5 px-3 text-right">Std Dev (σ)</th>
               <th className="py-2.5 px-3 text-right">Reduction (%)</th>
@@ -141,57 +140,57 @@ export const StrategyComparison: React.FC<StrategyComparisonProps> = ({
               <th className="py-2.5 px-3 text-center">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-850">
+          <tbody className="divide-y divide-[#261A33]/60">
             {Object.entries(strategies).map(([key, item]) => {
               const isSelected = selectedStrategyKey === key;
               return (
                 <tr
                   key={key}
-                  className={`hover:bg-slate-800/40 transition-colors ${
-                    isSelected ? 'bg-purple-900/20' : ''
+                  className={`hover:bg-[#1B1223]/50 transition-colors ${
+                    isSelected ? 'bg-[#A855F7]/15' : ''
                   }`}
                 >
-                  <td className="py-2.5 px-3 font-semibold text-slate-200 flex items-center space-x-1.5">
+                  <td className="py-2.5 px-3 font-semibold text-[#F8F3FF] flex items-center space-x-1.5">
                     {item.strategy_name === best_strategy && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 inline" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#39F5A5] inline" />
                     )}
                     <span>{item.strategy_name}</span>
                   </td>
-                  <td className="py-2.5 px-3 font-mono text-slate-400">
+                  <td className="py-2.5 px-3 font-mono text-[#B7A9C9]">
                     {item.selected_nodes.length > 0
                       ? item.selected_nodes.map((n) => `U${n}`).join(', ')
                       : 'None'}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-slate-200">
+                  <td className="py-2.5 px-3 text-right font-mono text-[#F8F3FF]">
                     {item.average_final_reach.toFixed(2)}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-slate-400">
+                  <td className="py-2.5 px-3 text-right font-mono text-[#B7A9C9]">
                     ±{item.standard_deviation.toFixed(2)}
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono font-bold">
                     <span
                       className={
                         item.reduction_percentage > 0
-                          ? 'text-emerald-400'
-                          : 'text-slate-400'
+                          ? 'text-[#39F5A5]'
+                          : 'text-[#B7A9C9]'
                       }
                     >
                       {item.reduction_percentage.toFixed(1)}%
                     </span>
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-slate-400">
+                  <td className="py-2.5 px-3 text-right font-mono text-[#B7A9C9]">
                     {(item.execution_time * 1000).toFixed(1)} ms
                   </td>
                   <td className="py-2.5 px-3 text-center">
                     <button
                       onClick={() => onSelectStrategy && onSelectStrategy(key, item)}
-                      className={`px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
                         isSelected
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                          ? 'bg-[#A855F7] text-white shadow-[0_0_10px_rgba(168,85,247,0.4)]'
+                          : 'bg-[#1B1223] hover:bg-[#261A33] text-[#B7A9C9] border border-[#261A33]'
                       }`}
                     >
-                      {isSelected ? 'Viewing' : 'View on Graph'}
+                      {isSelected ? 'Viewing' : 'Inspect'}
                     </button>
                   </td>
                 </tr>
@@ -203,3 +202,5 @@ export const StrategyComparison: React.FC<StrategyComparisonProps> = ({
     </div>
   );
 };
+
+export default StrategyComparison;

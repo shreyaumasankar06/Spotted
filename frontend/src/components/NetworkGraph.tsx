@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import cytoscape, { Core } from 'cytoscape';
 import { Node, Edge, NodeState } from '../services/api';
-import { Maximize2, RefreshCw } from 'lucide-react';
+import { Maximize2, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface NetworkGraphProps {
   nodes: Node[];
@@ -9,7 +9,7 @@ interface NetworkGraphProps {
   nodeStates?: Record<string, NodeState>;
   sourceNode?: number;
   containedNodes?: number[];
-  selectedStrategyName?: string;
+  onSelectNode?: (nodeId: number) => void;
 }
 
 export const NetworkGraph: React.FC<NetworkGraphProps> = ({
@@ -18,7 +18,7 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
   nodeStates = {},
   sourceNode,
   containedNodes = [],
-  selectedStrategyName,
+  onSelectNode,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
@@ -26,51 +26,58 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
   useEffect(() => {
     if (!containerRef.current || nodes.length === 0) return;
 
-    // Destroy existing instance
     if (cyRef.current) {
       cyRef.current.destroy();
     }
 
-    // Build cytoscape elements
     const elements: cytoscape.ElementDefinition[] = [];
 
-    // Map nodes
+    // Map Nodes
     nodes.forEach((n) => {
       const state = nodeStates[String(n.id)] || n.state || 'unaware';
       const isSource = n.id === sourceNode;
       const isContained = containedNodes.includes(n.id) || state === 'contained';
 
-      let nodeColor = '#64748B'; // unaware (slate)
-      let borderColor = '#475569';
+      // Colors following the exact user specification:
+      // Spreading/Source: #FF365E
+      // Contained: #39F5A5
+      // Unaware: #756B80
+      let nodeColor = '#756B80';
+      let borderColor = '#4A3E59';
       let borderWidth = 1;
+      let nodeSize = 22;
 
       if (isSource) {
-        nodeColor = '#F59E0B'; // Amber
-        borderColor = '#FBBF24';
-        borderWidth = 3;
+        nodeColor = '#FF365E';
+        borderColor = '#FF3CAC';
+        borderWidth = 4;
+        nodeSize = 30;
       } else if (isContained) {
-        nodeColor = '#10B981'; // Contained (emerald)
-        borderColor = '#34D399';
-        borderWidth = 2;
+        nodeColor = '#39F5A5';
+        borderColor = '#22C55E';
+        borderWidth = 2.5;
+        nodeSize = 24;
       } else if (state === 'active') {
-        nodeColor = '#EF4444'; // Active spreader (red)
-        borderColor = '#F87171';
-        borderWidth = 2;
+        nodeColor = '#FF365E';
+        borderColor = '#FF3CAC';
+        borderWidth = 2.5;
+        nodeSize = 26;
       }
 
       elements.push({
         data: {
           id: String(n.id),
-          label: String(n.id),
+          label: `U${n.id}`,
           color: nodeColor,
           borderColor: borderColor,
           borderWidth: borderWidth,
+          size: nodeSize,
           community: n.community ?? 0,
         },
       });
     });
 
-    // Map edges
+    // Map Edges
     edges.forEach((e, idx) => {
       elements.push({
         data: {
@@ -81,7 +88,7 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
       });
     });
 
-    // Initialize Cytoscape
+    // Initialize Cytoscape Instance
     const cy = cytoscape({
       container: containerRef.current,
       elements: elements,
@@ -91,13 +98,13 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
           style: {
             'background-color': 'data(color)',
             'label': 'data(label)',
-            'color': '#F8FAFC',
+            'color': '#F8F3FF',
             'font-size': '10px',
-            'font-family': 'JetBrains Mono, monospace',
+            'font-family': 'Inter, sans-serif',
             'text-valign': 'center',
             'text-halign': 'center',
-            'width': 24,
-            'height': 24,
+            'width': 'data(size)',
+            'height': 'data(size)',
             'border-width': 'data(borderWidth)',
             'border-color': 'data(borderColor)',
             'transition-property': 'background-color, border-color, width, height',
@@ -108,16 +115,19 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
           selector: 'edge',
           style: {
             'width': 1.5,
-            'line-color': '#334155',
-            'opacity': 0.6,
-            'curve-style': 'straight',
+            'line-color': '#261A33',
+            'opacity': 0.75,
+            'curve-style': 'bezier',
           },
         },
         {
           selector: ':selected',
           style: {
-            'border-width': 3,
-            'border-color': '#A78BFA',
+            'border-width': 4,
+            'border-color': '#A855F7',
+            'overlay-color': '#A855F7',
+            'overlay-padding': 6,
+            'overlay-opacity': 0.3,
           },
         },
       ],
@@ -125,12 +135,22 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         name: 'cose',
         animate: false,
         randomize: false,
-        nodeRepulsion: () => 4500,
-        idealEdgeLength: () => 60,
+        nodeRepulsion: () => 6000,
+        idealEdgeLength: () => 70,
+        gravity: 0.25,
       },
       minZoom: 0.2,
-      maxZoom: 3.0,
-      wheelSensitivity: 0.2,
+      maxZoom: 3.5,
+      wheelSensitivity: 0.25,
+    });
+
+    // Handle node click event
+    cy.on('tap', 'node', (evt) => {
+      const nodeObj = evt.target;
+      const nodeId = Number(nodeObj.id());
+      if (onSelectNode) {
+        onSelectNode(nodeId);
+      }
     });
 
     cyRef.current = cy;
@@ -141,11 +161,11 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         cyRef.current = null;
       }
     };
-  }, [nodes, edges, nodeStates, sourceNode, containedNodes]);
+  }, [nodes, edges, nodeStates, sourceNode, containedNodes, onSelectNode]);
 
   const handleFit = () => {
     if (cyRef.current) {
-      cyRef.current.fit(undefined, 30);
+      cyRef.current.fit(undefined, 40);
     }
   };
 
@@ -155,62 +175,77 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
     }
   };
 
-  return (
-    <div className="bg-[#0F172A] border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col h-[520px] relative">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-200 tracking-wide">
-            Interactive Network Topology
-          </h2>
-          <p className="text-xs text-slate-400">
-            {nodes.length} nodes · {edges.length} edges
-            {selectedStrategyName ? ` · Displaying: ${selectedStrategyName}` : ''}
-          </p>
-        </div>
+  const handleZoomIn = () => {
+    if (cyRef.current) {
+      cyRef.current.zoom(cyRef.current.zoom() * 1.25);
+    }
+  };
 
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleFit}
-            title="Fit to view"
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={handleResetLayout}
-            title="Re-layout network"
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        </div>
+  const handleZoomOut = () => {
+    if (cyRef.current) {
+      cyRef.current.zoom(cyRef.current.zoom() / 1.25);
+    }
+  };
+
+  return (
+    <div className="relative w-full h-full bg-[#08060B] overflow-hidden select-none">
+      {/* Network Canvas */}
+      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+
+      {/* Floating Canvas Controls (Bottom Left) */}
+      <div className="absolute bottom-6 left-6 z-20 flex items-center space-x-1.5 glass-panel p-1.5 rounded-xl border border-[#A855F7]/20 shadow-xl">
+        <button
+          onClick={handleZoomIn}
+          title="Zoom in"
+          className="p-2 rounded-lg hover:bg-[#1B1223] text-[#B7A9C9] hover:text-[#F8F3FF] transition-colors"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleZoomOut}
+          title="Zoom out"
+          className="p-2 rounded-lg hover:bg-[#1B1223] text-[#B7A9C9] hover:text-[#F8F3FF] transition-colors"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </button>
+        <div className="w-[1px] h-4 bg-[#261A33]" />
+        <button
+          onClick={handleFit}
+          title="Fit view"
+          className="p-2 rounded-lg hover:bg-[#1B1223] text-[#B7A9C9] hover:text-[#F8F3FF] transition-colors"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleResetLayout}
+          title="Re-layout topology"
+          className="p-2 rounded-lg hover:bg-[#1B1223] text-[#B7A9C9] hover:text-[#F8F3FF] transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Cytoscape Canvas */}
-      <div
-        ref={containerRef}
-        className="w-full flex-1 rounded-xl bg-[#080C14]/90 overflow-hidden border border-slate-850"
-      />
-
-      {/* Legend */}
-      <div className="pt-3 flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400">
+      {/* Floating Legend Overlay (Top Left below status) */}
+      <div className="absolute top-20 left-6 z-20 hidden lg:flex items-center space-x-4 glass-panel px-3.5 py-2 rounded-xl border border-[#261A33] text-[11px] text-[#B7A9C9]">
         <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-3 rounded-full bg-[#F59E0B] border border-[#FBBF24]"></span>
-          <span>Source User</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FF365E] shadow-[0_0_8px_#FF365E]"></span>
+          <span className="font-medium text-[#F8F3FF]">Source User</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-3 rounded-full bg-[#EF4444] border border-[#F87171]"></span>
-          <span>Active Spreader</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FF365E]"></span>
+          <span>Spreading</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-3 rounded-full bg-[#10B981] border border-[#34D399]"></span>
-          <span>Contained (Intervened)</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#39F5A5] shadow-[0_0_6px_#39F5A5]"></span>
+          <span>Contained</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-3 rounded-full bg-[#64748B] border border-[#475569]"></span>
-          <span>Unaware User</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#756B80]"></span>
+          <span>Unaware</span>
         </div>
       </div>
     </div>
   );
 };
+
+export default NetworkGraph;
