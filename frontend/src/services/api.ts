@@ -6,6 +6,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export type NodeState = 'unaware' | 'active' | 'contained';
+export type InterventionType = 'isolate' | 'warn' | 'fact_check' | 'community_alert';
 
 export interface Node {
   id: number;
@@ -13,6 +14,8 @@ export interface Node {
   state: NodeState;
   community?: number;
   degree?: number;
+  speed?: number;
+  reliability?: number;
 }
 
 export interface Edge {
@@ -44,12 +47,19 @@ export interface NetworkGenerateResponse {
   message: string;
 }
 
+export interface InterventionDetail {
+  node_id: number;
+  type: InterventionType;
+}
+
 export interface SpreadStep {
   step: number;
   active_count: number;
   contained_count: number;
   unaware_count: number;
+  antidote_count?: number;
   newly_infected: number[];
+  newly_corrected?: number[];
 }
 
 export interface SimulationRunRequest {
@@ -58,6 +68,10 @@ export interface SimulationRunRequest {
   source: number;
   probability: float;
   interventions?: number[];
+  budget?: number;
+  intervention_details?: InterventionDetail[];
+  antidote_sources?: number[];
+  antidote_probability?: number;
   seed?: number | null;
   max_steps?: number;
 }
@@ -69,7 +83,9 @@ export interface SimulationRunResponse {
   interventions: number[];
   spread_history: SpreadStep[];
   final_reach: number;
+  antidote_reach?: number;
   final_node_states: Record<string, NodeState>;
+  antidote_states?: Record<string, 'aware' | 'unaware'>;
   steps_taken: number;
   total_nodes: number;
 }

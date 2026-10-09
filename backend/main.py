@@ -97,6 +97,10 @@ def api_run_simulation(req: SimulationRunRequest) -> SimulationRunResponse:
             source=req.source,
             probability=req.probability,
             interventions=req.interventions,
+            budget=req.budget,
+            intervention_details=req.intervention_details,
+            antidote_sources=req.antidote_sources,
+            antidote_probability=req.antidote_probability,
             seed=req.seed,
             max_steps=req.max_steps
         )

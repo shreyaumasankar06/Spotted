@@ -10,7 +10,7 @@ import {
   Cell,
 } from 'recharts';
 import { InterventionCompareResponse, StrategyMetrics } from '../services/api';
-import { Award, CheckCircle2 } from 'lucide-react';
+import { Award, CheckCircle2, Download } from 'lucide-react';
 
 interface StrategyComparisonProps {
   comparisonData?: InterventionCompareResponse | null;
@@ -36,7 +36,7 @@ export const StrategyComparison: React.FC<StrategyComparisonProps> = ({
     );
   }
 
-  const { strategies, best_strategy, summary, num_runs } = comparisonData;
+  const { strategies, best_strategy, summary, num_runs, budget } = comparisonData;
 
   const barData = Object.entries(strategies).map(([key, item]) => ({
     key,
@@ -54,9 +54,40 @@ export const StrategyComparison: React.FC<StrategyComparisonProps> = ({
     return '#756B80';
   };
 
+  const handleExportCSV = () => {
+    const headers = [
+      'Strategy Name',
+      'Selected Target Nodes',
+      'Average Final Reach',
+      'Standard Deviation',
+      'Reduction Percentage',
+      'Intervention Count',
+      'Execution Time (s)'
+    ];
+    const rows = Object.values(strategies).map((s) => [
+      `"${s.strategy_name}"`,
+      `"${s.selected_nodes.map((n) => `User #${n}`).join('; ')}"`,
+      s.average_final_reach.toFixed(2),
+      s.standard_deviation.toFixed(2),
+      `${s.reduction_percentage.toFixed(1)}%`,
+      s.intervention_count,
+      s.execution_time.toFixed(4)
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `spotted_containment_benchmarks_budget${budget}_runs${num_runs}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="glass-panel p-5 rounded-2xl space-y-4">
-      {/* Header and Summary */}
+      {/* Header, Summary, and CSV Export Action */}
       <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 border-b border-[#261A33] gap-3">
         <div>
           <div className="flex items-center space-x-2">
@@ -64,17 +95,28 @@ export const StrategyComparison: React.FC<StrategyComparisonProps> = ({
               Containment Performance Benchmarks
             </h3>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1B1223] text-[#A855F7] font-mono border border-[#261A33]">
-              {num_runs} trials / strategy
+              {num_runs} trials / strategy · Budget k={budget}
             </span>
           </div>
           <p className="text-xs text-[#B7A9C9] mt-0.5">{summary}</p>
         </div>
 
-        <div className="flex items-center space-x-2 bg-[#39F5A5]/10 border border-[#39F5A5]/30 px-3 py-1.5 rounded-xl shadow-[0_0_15px_rgba(57,245,165,0.1)]">
-          <Award className="w-4 h-4 text-[#39F5A5]" />
-          <span className="text-xs font-semibold text-[#39F5A5]">
-            Optimal Strategy: {best_strategy}
-          </span>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleExportCSV}
+            className="px-3 py-1.5 rounded-xl bg-[#1B1223] hover:bg-[#261A33] text-[#F8F3FF] border border-[#A855F7]/30 text-xs font-medium transition-all flex items-center space-x-1.5 shadow-md"
+            title="Export backend benchmark results to CSV file"
+          >
+            <Download className="w-3.5 h-3.5 text-[#A855F7]" />
+            <span>Export CSV</span>
+          </button>
+
+          <div className="flex items-center space-x-1.5 bg-[#39F5A5]/10 border border-[#39F5A5]/30 px-3 py-1.5 rounded-xl shadow-[0_0_15px_rgba(57,245,165,0.1)]">
+            <Award className="w-4 h-4 text-[#39F5A5]" />
+            <span className="text-xs font-semibold text-[#39F5A5]">
+              Optimal: {best_strategy}
+            </span>
+          </div>
         </div>
       </div>
 

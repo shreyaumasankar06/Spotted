@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import cytoscape, { Core } from 'cytoscape';
-import { Node, Edge, NodeState } from '../services/api';
+import { Node, Edge, NodeState, SimulationRunResponse } from '../services/api';
 import { Maximize2, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
+import HoverTooltip, { HoveredNodeInfo } from './HoverTooltip';
 
 interface NetworkGraphProps {
   nodes: Node[];
@@ -9,6 +10,9 @@ interface NetworkGraphProps {
   nodeStates?: Record<string, NodeState>;
   sourceNode?: number;
   containedNodes?: number[];
+  pendingInterventions?: number[];
+  antidoteNodes?: number[];
+  simulation?: SimulationRunResponse | null;
   onSelectNode?: (nodeId: number) => void;
 }
 
@@ -18,60 +22,46 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
   nodeStates = {},
   sourceNode,
   containedNodes = [],
+  pendingInterventions = [],
+  antidoteNodes = [],
+  simulation,
   onSelectNode,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const onSelectNodeRef = useRef(onSelectNode);
 
+  // Keep latest onSelectNode callback ref stable
+  useEffect(() => {
+    onSelectNodeRef.current = onSelectNode;
+  }, [onSelectNode]);
+
+  // Hovered node state for floating tooltip
+  const [hoverInfo, setHoverInfo] = useState<HoveredNodeInfo | null>(null);
+
+  // 1. Initialise Cytoscape Graph & Layout ONCE when topology (nodes/edges) changes
   useEffect(() => {
     if (!containerRef.current || nodes.length === 0) return;
 
+    // Destroy existing instance before building a new topology
     if (cyRef.current) {
       cyRef.current.destroy();
+      cyRef.current = null;
     }
 
     const elements: cytoscape.ElementDefinition[] = [];
 
     // Map Nodes
     nodes.forEach((n) => {
-      const state = nodeStates[String(n.id)] || n.state || 'unaware';
-      const isSource = n.id === sourceNode;
-      const isContained = containedNodes.includes(n.id) || state === 'contained';
-
-      // Colors following the exact user specification:
-      // Spreading/Source: #FF365E
-      // Contained: #39F5A5
-      // Unaware: #756B80
-      let nodeColor = '#756B80';
-      let borderColor = '#4A3E59';
-      let borderWidth = 1;
-      let nodeSize = 22;
-
-      if (isSource) {
-        nodeColor = '#FF365E';
-        borderColor = '#FF3CAC';
-        borderWidth = 4;
-        nodeSize = 30;
-      } else if (isContained) {
-        nodeColor = '#39F5A5';
-        borderColor = '#22C55E';
-        borderWidth = 2.5;
-        nodeSize = 24;
-      } else if (state === 'active') {
-        nodeColor = '#FF365E';
-        borderColor = '#FF3CAC';
-        borderWidth = 2.5;
-        nodeSize = 26;
-      }
-
       elements.push({
         data: {
           id: String(n.id),
           label: `U${n.id}`,
-          color: nodeColor,
-          borderColor: borderColor,
-          borderWidth: borderWidth,
-          size: nodeSize,
+          color: '#756B80',
+          borderColor: '#4A3E59',
+          borderWidth: 1.5,
+          size: 22,
+          shape: 'ellipse',
           community: n.community ?? 0,
         },
       });
@@ -88,7 +78,7 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
       });
     });
 
-    // Initialize Cytoscape Instance
+    // Instantiate Cytoscape
     const cy = cytoscape({
       container: containerRef.current,
       elements: elements,
@@ -105,10 +95,11 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
             'text-halign': 'center',
             'width': 'data(size)',
             'height': 'data(size)',
+            'shape': 'ellipse',
             'border-width': 'data(borderWidth)',
             'border-color': 'data(borderColor)',
             'transition-property': 'background-color, border-color, width, height',
-            'transition-duration': 0.3,
+            'transition-duration': 0.2,
           },
         },
         {
@@ -135,21 +126,41 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         name: 'cose',
         animate: false,
         randomize: false,
-        nodeRepulsion: () => 6000,
-        idealEdgeLength: () => 70,
-        gravity: 0.25,
+        nodeRepulsion: () => 6500,
+        idealEdgeLength: () => 75,
+        gravity: 0.2,
       },
       minZoom: 0.2,
       maxZoom: 3.5,
       wheelSensitivity: 0.25,
     });
 
-    // Handle node click event
+    // Event Listener: Hover tooltip
+    cy.on('mouseover', 'node', (evt) => {
+      const nodeObj = evt.target;
+      const nodeId = Number(nodeObj.id());
+      const renderedPos = nodeObj.renderedPosition();
+      const containerBounds = containerRef.current?.getBoundingClientRect();
+
+      if (containerBounds) {
+        setHoverInfo({
+          nodeId,
+          x: containerBounds.left + renderedPos.x,
+          y: containerBounds.top + renderedPos.y,
+        });
+      }
+    });
+
+    cy.on('mouseout', 'node', () => {
+      setHoverInfo(null);
+    });
+
+    // Event Listener: Tap / Click node (does not rerun layout or move nodes)
     cy.on('tap', 'node', (evt) => {
       const nodeObj = evt.target;
       const nodeId = Number(nodeObj.id());
-      if (onSelectNode) {
-        onSelectNode(nodeId);
+      if (onSelectNodeRef.current) {
+        onSelectNodeRef.current(nodeId);
       }
     });
 
@@ -161,7 +172,65 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         cyRef.current = null;
       }
     };
-  }, [nodes, edges, nodeStates, sourceNode, containedNodes, onSelectNode]);
+  }, [nodes, edges]);
+
+  // 2. In-Place Visual Style Updates (ZERO layout recalculation or node movement)
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || cy.destroyed()) return;
+
+    cy.batch(() => {
+      nodes.forEach((n) => {
+        const cyNode = cy.getElementById(String(n.id));
+        if (!cyNode || cyNode.length === 0) return;
+
+        const state = nodeStates[String(n.id)] || n.state || 'unaware';
+        const isSource = n.id === sourceNode;
+        const isContained = containedNodes.includes(n.id) || state === 'contained';
+        const isPending = pendingInterventions.includes(n.id);
+        const isAntidote = antidoteNodes.includes(n.id) || simulation?.antidote_states?.[String(n.id)] === 'aware';
+
+        let nodeColor = '#756B80'; // Unaware
+        let borderColor = '#4A3E59';
+        let borderWidth = 1.5;
+        let nodeSize = 22;
+
+        if (isSource) {
+          nodeColor = '#FF365E';
+          borderColor = '#FF3CAC';
+          borderWidth = 4;
+          nodeSize = 30;
+        } else if (isPending) {
+          nodeColor = '#A855F7';
+          borderColor = '#FF3CAC';
+          borderWidth = 3;
+          nodeSize = 26;
+        } else if (isContained) {
+          nodeColor = '#39F5A5';
+          borderColor = '#22C55E';
+          borderWidth = 3;
+          nodeSize = 24;
+        } else if (isAntidote) {
+          nodeColor = '#39F5A5';
+          borderColor = '#A855F7';
+          borderWidth = 3.5;
+          nodeSize = 24;
+        } else if (state === 'active') {
+          nodeColor = '#FF365E';
+          borderColor = '#FF3CAC';
+          borderWidth = 2.5;
+          nodeSize = 24;
+        }
+
+        cyNode.data({
+          color: nodeColor,
+          borderColor: borderColor,
+          borderWidth: borderWidth,
+          size: nodeSize,
+        });
+      });
+    });
+  }, [nodes, nodeStates, sourceNode, containedNodes, pendingInterventions, antidoteNodes, simulation]);
 
   const handleFit = () => {
     if (cyRef.current) {
@@ -192,6 +261,17 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
       {/* Network Canvas */}
       <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
 
+      {/* Hover Tooltip Overlay */}
+      <HoverTooltip
+        hoverInfo={hoverInfo}
+        nodes={nodes}
+        edges={edges}
+        nodeStates={nodeStates}
+        sourceNode={sourceNode ?? 0}
+        containedNodes={containedNodes}
+        simulation={simulation}
+      />
+
       {/* Floating Canvas Controls (Bottom Left) */}
       <div className="absolute bottom-6 left-6 z-20 flex items-center space-x-1.5 glass-panel p-1.5 rounded-xl border border-[#A855F7]/20 shadow-xl">
         <button
@@ -211,25 +291,25 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         <div className="w-[1px] h-4 bg-[#261A33]" />
         <button
           onClick={handleFit}
-          title="Fit view"
+          title="Fit view to screen"
           className="p-2 rounded-lg hover:bg-[#1B1223] text-[#B7A9C9] hover:text-[#F8F3FF] transition-colors"
         >
           <Maximize2 className="w-4 h-4" />
         </button>
         <button
           onClick={handleResetLayout}
-          title="Re-layout topology"
+          title="Reset topology layout"
           className="p-2 rounded-lg hover:bg-[#1B1223] text-[#B7A9C9] hover:text-[#F8F3FF] transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Floating Legend Overlay (Top Left below status) */}
+      {/* Visual Legend Overlay (Top Left below status bar) */}
       <div className="absolute top-20 left-6 z-20 hidden lg:flex items-center space-x-4 glass-panel px-3.5 py-2 rounded-xl border border-[#261A33] text-[11px] text-[#B7A9C9]">
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#FF365E] shadow-[0_0_8px_#FF365E]"></span>
-          <span className="font-medium text-[#F8F3FF]">Source User</span>
+          <span className="w-3 h-3 rounded-full bg-[#FF365E] border-2 border-[#FF3CAC] shadow-[0_0_8px_#FF365E]"></span>
+          <span className="font-medium text-[#F8F3FF]">Source</span>
         </div>
         <div className="flex items-center space-x-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#FF365E]"></span>
@@ -238,6 +318,10 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         <div className="flex items-center space-x-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#39F5A5] shadow-[0_0_6px_#39F5A5]"></span>
           <span>Contained</span>
+        </div>
+        <div className="flex items-center space-x-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#A855F7] border border-[#FF3CAC]"></span>
+          <span>Pending Target</span>
         </div>
         <div className="flex items-center space-x-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#756B80]"></span>

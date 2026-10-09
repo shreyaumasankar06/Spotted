@@ -110,8 +110,8 @@ All endpoints are prefixed with `/api`.
 ```json
 {
   "nodes": [
-    { "id": 0, "label": "User 0", "state": "unaware", "community": 0, "degree": 4 },
-    { "id": 1, "label": "User 1", "state": "unaware", "community": 0, "degree": 5 }
+    { "id": 0, "label": "User 0", "state": "unaware", "community": 0, "degree": 4, "speed": 1.0, "reliability": 85.0 },
+    { "id": 1, "label": "User 1", "state": "unaware", "community": 0, "degree": 5, "speed": 0.8, "reliability": 40.0 }
   ],
   "edges": [
     { "source": 0, "target": 1 }
@@ -119,6 +119,11 @@ All endpoints are prefixed with `/api`.
   "source": 0,
   "probability": 0.35,
   "interventions": [1],
+  "intervention_details": [
+    { "node_id": 1, "type": "fact_check" }
+  ],
+  "antidote_sources": [1],
+  "antidote_probability": 0.4,
   "seed": 100,
   "max_steps": 50
 }
@@ -126,13 +131,16 @@ All endpoints are prefixed with `/api`.
 
 | Field | Type | Required | Constraints | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `nodes` | array[Node] | Yes | $\ge 2$ nodes | Network nodes list |
+| `nodes` | array[Node] | Yes | $\ge 2$ nodes | Network nodes list with `speed` and `reliability` |
 | `edges` | array[Edge] | Yes | $\ge 1$ edge | Network edges list |
 | `source` | integer | Yes | Must exist in `nodes` | Initial node starting the rumour |
-| `probability`| float | Yes | $0.0 \le p \le 1.0$ | Probability of transmission per connected edge per step |
-| `interventions`| array[int] | No (Default: []) | Valid node IDs, $\ne \text{source}$ | Contained nodes |
-| `seed` | integer / null | No (Default: null) | Any integer | Seed for reproducible run |
-| `max_steps` | integer | No (Default: 50) | $1 \le \text{max\_steps} \le 200$ | Guard against runaway loops |
+| `probability`| float | Yes | $0.0 \le p \le 1.0$ | Base probability of transmission per connected edge per step |
+| `interventions`| array[int] | No (Default: []) | Valid node IDs, $\ne \text{source}$ | Contained nodes list |
+| `intervention_details`| array[InterventionDetail] | No (Default: null) | Valid node IDs | Multi-type intervention configurations (`isolate`, `warn`, `fact_check`, `community_alert`) |
+| `antidote_sources`| array[int] | No (Default: []) | Valid node IDs | Node IDs starting corrective Antidote spread |
+| `antidote_probability`| float | No (Default: 0.4) | $0.0 \le p \le 1.0$ | Transmission probability for Antidote spread |
+| `seed` | integer / null | No (Default: null) | Any integer | Seed for reproducible simulation run |
+| `max_steps` | integer | No (Default: 50) | $1 \le \text{max\_steps} \le 200$ | Safety ceiling on discrete propagation steps |
 
 #### Response (200 OK)
 ```json
@@ -145,23 +153,30 @@ All endpoints are prefixed with `/api`.
       "active_count": 1,
       "contained_count": 1,
       "unaware_count": 48,
-      "newly_infected": [0]
+      "antidote_count": 1,
+      "newly_infected": [0],
+      "newly_corrected": [1]
     },
     {
       "step": 1,
       "active_count": 3,
       "contained_count": 1,
       "unaware_count": 46,
-      "newly_infected": [4, 7]
+      "antidote_count": 2,
+      "newly_infected": [4, 7],
+      "newly_corrected": [2]
     }
   ],
   "final_reach": 3,
+  "antidote_reach": 2,
   "final_node_states": {
     "0": "active",
     "1": "contained",
-    "2": "unaware",
-    "4": "active",
-    "7": "active"
+    "2": "unaware"
+  },
+  "antidote_states": {
+    "1": "aware",
+    "2": "aware"
   },
   "steps_taken": 2,
   "total_nodes": 50
