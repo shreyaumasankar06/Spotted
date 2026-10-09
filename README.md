@@ -2,8 +2,6 @@ Spotted.
 
 A Rumour Containment Simulator
 
-*Detect the rumour. Disrupt the spread.*
-
 Spotted. is a simulation-based platform that models how misinformation propagates through social networks and investigates how strategic interventions can reduce its spread.
 
 Inspired by the intrigue of anonymous gossip and interconnected social circles, Spotted. brings together **social network analysis, probabilistic simulation, and intervention optimization** to explore an important question:
@@ -118,11 +116,6 @@ spotted/
 │
 └── README.md
 ```
-
-*Note: The structure above describes the intended organization; adjust it to match the files actually implemented.*
-
-Getting Started
-
 Prerequisites
 
 * Python 3.10 or later
