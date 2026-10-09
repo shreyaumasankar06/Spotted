@@ -8,24 +8,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: {
-          darkest: '#080C14',
-          dark: '#0F172A',
-          card: '#1E293B',
-          hover: '#334155',
+        spotted: {
+          bg: '#08060B',
+          panel: '#120D18',
+          elevated: '#1B1223',
+          purple: '#A855F7',
+          pink: '#FF3CAC',
+          spreading: '#FF365E',
+          contained: '#39F5A5',
+          unaware: '#756B80',
+          text: '#F8F3FF',
+          muted: '#B7A9C9',
+          border: '#261A33',
         },
-        brand: {
-          primary: '#8B5CF6',
-          hover: '#7C3AED',
-          accent: '#A78BFA',
-          glow: 'rgba(139, 92, 246, 0.25)',
-        },
-        node: {
-          unaware: '#64748B',
-          active: '#EF4444',
-          contained: '#10B981',
-          source: '#F59E0B',
-        }
+      },
+      fontFamily: {
+        serif: ['"Bodoni Moda"', '"Playfair Display"', 'Georgia', 'serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
       },
     },
   },
