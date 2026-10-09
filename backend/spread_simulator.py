@@ -1,8 +1,8 @@
-"""Spread Simulator Module for Spotted. (Person 1)
+"""Spread Simulator Module for Spotted.
 
-Simulates probabilistic rumour propagation over discrete time steps using
-synchronous Independent Cascade dynamics.
-Maintains clear node-state semantics: unaware, active, and contained.
+Simulates stochastic rumour propagation and antidote spread over discrete time steps.
+Includes node attributes (speed, reliability) and multi-type intervention controls:
+isolate, warn, fact_check, and community_alert.
 """
 
 from typing import Optional, Set, List, Dict, Any, Union
@@ -15,45 +15,54 @@ def simulate_spread(
     source: int,
     probability: float,
     interventions: Optional[Union[Set[int], List[int]]] = None,
+    budget: Optional[int] = None,
+    intervention_details: Optional[List[Dict[str, Any]]] = None,
+    antidote_sources: Optional[List[int]] = None,
+    antidote_probability: float = 0.4,
     seed: Optional[int] = None,
     max_steps: int = 50
 ) -> Dict[str, Any]:
-    """Simulate rumour propagation over discrete time steps on a graph.
+    """Simulate rumour propagation and corrective antidote spread over discrete time steps.
     
-    Node states:
-      - unaware: Has not encountered the rumour.
-      - active: Exposed and informed with the rumour.
-      - contained: Intervened upon prior to spread; cannot contract or transmit rumour.
-
-    Intervention Policy:
-      - Preventative: Interventions take effect at step 0 before rumour spread begins.
-      - Source Immunity: The initial source cannot be intervened upon. If present
-        in interventions, it is automatically excluded.
-      - Contained nodes act as barriers/firewalls.
-
-    Synchronous Dynamics:
-      - Users newly exposed during step t begin spreading only on step t + 1.
-      - Transmission attempts occur independently across edges with given probability.
-      - Propagation ceases when no newly infected nodes are produced or max_steps reached.
-      
+    Attributes & Mechanisms:
+    1. Synchronous Dynamics: Newly exposed users in step t spread starting at step t+1.
+    2. Node Speed: Fast nodes (speed >= 1.0) attempt transmission every step;
+       slow nodes (speed < 1.0) attempt transmission with interval = round(1 / speed).
+    3. Node Reliability: Perceived credibility R(u) in [0, 100] scales effective transmission
+       credibility: Credibility_Multiplier = 0.5 + 0.5 * (R(u) / 100).
+    4. Antidote Mechanism: Corrective information spreads independently from antidote sources.
+    5. Interventions & Budget:
+       - Strictly enforces budget k. Rejects requests exceeding budget or containing duplicates.
+       - 'isolate': Transmission probability set to 0. Node state = 'contained'.
+       - 'warn': Forwarding probability scaled by 0.3.
+       - 'fact_check': Forwarding probability set to 0 AND node becomes an Antidote source.
+       - 'community_alert': Forwarding probability of all direct neighbours scaled by 0.5.
+       
     Args:
         graph: NetworkX undirected Graph representing the social network.
-        source: Node ID that initiates the rumour.
-        probability: Spreading probability per edge per step (0.0 to 1.0).
-        interventions: Optional set or list of node IDs targeted for containment.
+        source: Node ID initiating the rumour.
+        probability: Base spreading probability per edge per step (0.0 to 1.0).
+        interventions: Optional list/set of node IDs selected for containment.
+        budget: Optional maximum intervention budget constraint.
+        intervention_details: Optional list of dicts with 'node_id' and 'type'.
+        antidote_sources: Optional list of node IDs starting antidote spread.
+        antidote_probability: Base antidote spreading probability (0.0 to 1.0).
         seed: Optional random seed for reproducible simulation.
         max_steps: Maximum discrete steps to simulate.
         
     Returns:
         Dict[str, Any]: Structured simulation result matching SimulationRunResponse schema.
-        
-    Raises:
-        ValueError: If source is not in graph or probability is out of bounds [0.0, 1.0].
     """
     if source not in graph:
         raise ValueError(f"Source node {source} does not exist in graph.")
     if not (0.0 <= probability <= 1.0):
         raise ValueError(f"Spreading probability must be between 0.0 and 1.0, got {probability}")
+    if not (0.0 <= antidote_probability <= 1.0):
+        raise ValueError(f"Antidote probability must be between 0.0 and 1.0, got {antidote_probability}")
+
+    # Check for duplicate targets in list representation
+    if isinstance(interventions, list) and len(interventions) != len(set(interventions)):
+        raise ValueError("Duplicate intervention targets detected in request.")
 
     rng = random.Random(seed)
     total_nodes = graph.number_of_nodes()
@@ -62,67 +71,182 @@ def simulate_spread(
     raw_interventions = set(interventions) if interventions else set()
     valid_interventions = {n for n in raw_interventions if n in graph and n != source}
 
-    # Initialize node states
+    # Strict budget enforcement check
+    if budget is not None and len(valid_interventions) > budget:
+        raise ValueError(f"Intervention request ({len(valid_interventions)} nodes) exceeds budget limit of {budget}.")
+
+    # Map intervention type per node ID ('isolate', 'warn', 'fact_check', 'community_alert')
+    intervention_type_map: Dict[int, str] = {}
+    if intervention_details:
+        for detail in intervention_details:
+            nid = detail.get("node_id") if isinstance(detail, dict) else getattr(detail, "node_id", None)
+            itype = detail.get("type") if isinstance(detail, dict) else getattr(detail, "type", "isolate")
+            if nid in graph and nid != source:
+                intervention_type_map[nid] = itype
+                valid_interventions.add(nid)
+    else:
+        for nid in valid_interventions:
+            intervention_type_map[nid] = "isolate"
+
+    # Identify nodes affected by community alert (neighbours of community_alert targets)
+    community_alerted_nodes: Set[int] = set()
+    for nid, itype in intervention_type_map.items():
+        if itype == "community_alert":
+            for nbr in graph.neighbors(nid):
+                community_alerted_nodes.add(nbr)
+
+    # Initialize Antidote sources
+    antidote_sources_set: Set[int] = set(antidote_sources) if antidote_sources else set()
+    # Fact-checked nodes automatically become Antidote sources
+    for nid, itype in intervention_type_map.items():
+        if itype == "fact_check":
+            antidote_sources_set.add(nid)
+
+    # Initialize Node States & Antidote States independently
     node_states: Dict[int, str] = {}
+    antidote_states: Dict[int, str] = {}
+
     for node in graph.nodes():
+        # Rumour State initialization
         if node == source:
             node_states[node] = "active"
-        elif node in valid_interventions:
+        elif node in valid_interventions and intervention_type_map.get(node) in ("isolate", "fact_check"):
             node_states[node] = "contained"
         else:
             node_states[node] = "unaware"
 
-    # Active informed nodes (cumulative reach)
+        # Antidote State initialization
+        if node in antidote_sources_set:
+            antidote_states[node] = "aware"
+        else:
+            antidote_states[node] = "unaware"
+
+    # Sets tracking active spreaders
     active_nodes: Set[int] = {source}
-    current_spreaders: Set[int] = {source}
+    antidote_aware_nodes: Set[int] = set(antidote_sources_set)
 
     spread_history: List[Dict[str, Any]] = []
 
-    # Step 0 snapshot
+    # Step 0 Snapshot
+    contained_count = sum(1 for s in node_states.values() if s == "contained")
     spread_history.append({
         "step": 0,
         "active_count": len(active_nodes),
-        "contained_count": len(valid_interventions),
-        "unaware_count": total_nodes - len(active_nodes) - len(valid_interventions),
-        "newly_infected": [source]
+        "contained_count": contained_count,
+        "unaware_count": total_nodes - len(active_nodes) - contained_count,
+        "antidote_count": len(antidote_aware_nodes),
+        "newly_infected": [source],
+        "newly_corrected": sorted(list(antidote_sources_set))
     })
 
+    # Active spreaders are nodes that can transmit to unaware neighbours
+    # A node remains an active spreader in steps until attempts complete or neighbours are no longer unaware
+    active_rumour_spreaders: Set[int] = {source}
+    active_antidote_spreaders: Set[int] = set(antidote_sources_set)
+
     step = 0
-    while current_spreaders and step < max_steps:
+    while (active_rumour_spreaders or active_antidote_spreaders) and step < max_steps:
         step += 1
         newly_infected_step: Set[int] = set()
+        newly_corrected_step: Set[int] = set()
 
-        # Each current spreader attempts to transmit to its unaware neighbours
-        # Use sorted order for deterministic behavior with fixed seed
-        for spreader in sorted(current_spreaders):
-            for neighbour in sorted(graph.neighbors(spreader)):
-                # Only unaware nodes can be infected (contained and active are immune)
-                if node_states[neighbour] == "unaware":
-                    if probability >= 1.0 or (probability > 0.0 and rng.random() < probability):
-                        newly_infected_step.add(neighbour)
+        # ----------------------------------------------------------------------
+        # A. Antidote Propagation (Corrective Information Spread)
+        # ----------------------------------------------------------------------
+        for spreader in sorted(active_antidote_spreaders):
+            spreader_data = graph.nodes[spreader]
+            spreader_speed = spreader_data.get("speed", 1.0)
+            spreader_rel = spreader_data.get("reliability", 50.0)
 
-        # Synchronous transition for newly infected users
+            # Node Speed Timing Rule: Interval in steps = max(1, round(1 / speed))
+            interval = max(1, int(round(1.0 / spreader_speed))) if spreader_speed < 1.0 else 1
+            if step % interval != 0 and step > 1:
+                continue
+
+            # Reliability Credibility Multiplier
+            credibility_mult = 0.5 + 0.5 * (spreader_rel / 100.0)
+            eff_antidote_prob = min(1.0, max(0.0, antidote_probability * credibility_mult))
+
+            for nbr in sorted(graph.neighbors(spreader)):
+                if antidote_states[nbr] == "unaware":
+                    if eff_antidote_prob >= 1.0 or (eff_antidote_prob > 0.0 and rng.random() < eff_antidote_prob):
+                        newly_corrected_step.add(nbr)
+
+        # Apply Antidote state changes
+        for node in newly_corrected_step:
+            antidote_states[node] = "aware"
+            antidote_aware_nodes.add(node)
+
+        # ----------------------------------------------------------------------
+        # B. Rumour Propagation (Misinformation Spread)
+        # ----------------------------------------------------------------------
+        for spreader in sorted(active_rumour_spreaders):
+            spreader_data = graph.nodes[spreader]
+            spreader_speed = spreader_data.get("speed", 1.0)
+            spreader_rel = spreader_data.get("reliability", 50.0)
+
+            # Node Speed Timing Rule
+            interval = max(1, int(round(1.0 / spreader_speed))) if spreader_speed < 1.0 else 1
+            if step % interval != 0 and step > 1:
+                continue
+
+            # Reliability Credibility Multiplier
+            credibility_mult = 0.5 + 0.5 * (spreader_rel / 100.0)
+
+            # Intervention Forwarding Multiplier
+            itype = intervention_type_map.get(spreader)
+            if itype in ("isolate", "fact_check"):
+                intervention_mult = 0.0
+            elif itype == "warn":
+                intervention_mult = 0.3
+            else:
+                intervention_mult = 1.0
+
+            for nbr in sorted(graph.neighbors(spreader)):
+                if node_states[nbr] == "unaware":
+                    # Community alert multiplier
+                    comm_mult = 0.5 if (nbr in community_alerted_nodes or spreader in community_alerted_nodes) else 1.0
+
+                    eff_rumour_prob = min(1.0, max(0.0, probability * credibility_mult * intervention_mult * comm_mult))
+
+                    if eff_rumour_prob >= 1.0 or (eff_rumour_prob > 0.0 and rng.random() < eff_rumour_prob):
+                        newly_infected_step.add(nbr)
+
+        # Apply Rumour state changes
         for node in newly_infected_step:
             node_states[node] = "active"
             active_nodes.add(node)
 
+        # Update step history
+        contained_count = sum(1 for s in node_states.values() if s == "contained")
         spread_history.append({
             "step": step,
             "active_count": len(active_nodes),
-            "contained_count": len(valid_interventions),
-            "unaware_count": total_nodes - len(active_nodes) - len(valid_interventions),
-            "newly_infected": sorted(list(newly_infected_step))
+            "contained_count": contained_count,
+            "unaware_count": total_nodes - len(active_nodes) - contained_count,
+            "antidote_count": len(antidote_aware_nodes),
+            "newly_infected": sorted(list(newly_infected_step)),
+            "newly_corrected": sorted(list(newly_corrected_step))
         })
 
-        # Newly exposed users become the spreaders for the subsequent step
-        current_spreaders = newly_infected_step
+        # Active spreaders for next step are nodes with remaining unaware neighbours
+        active_rumour_spreaders = {
+            n for n in active_nodes
+            if any(node_states[nbr] == "unaware" for nbr in graph.neighbors(n))
+        }
+        active_antidote_spreaders = {
+            n for n in antidote_aware_nodes
+            if any(antidote_states[nbr] == "unaware" for nbr in graph.neighbors(n))
+        }
 
     return {
         "source": source,
         "interventions": sorted(list(valid_interventions)),
         "spread_history": spread_history,
         "final_reach": len(active_nodes),
+        "antidote_reach": len(antidote_aware_nodes),
         "final_node_states": {str(n): state for n, state in node_states.items()},
+        "antidote_states": {str(n): state for n, state in antidote_states.items()},
         "steps_taken": step,
         "total_nodes": total_nodes
     }

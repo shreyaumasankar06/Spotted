@@ -28,6 +28,8 @@ class Node(BaseModel):
     state: NodeState = Field(default=NodeState.UNAWARE, description="Current propagation state")
     community: Optional[int] = Field(None, description="Community cluster identifier")
     degree: Optional[int] = Field(None, description="Number of direct connections")
+    speed: float = Field(default=1.0, ge=0.1, le=2.0, description="Transmission frequency/speed factor (0.1 to 2.0)")
+    reliability: float = Field(default=50.0, ge=0.0, le=100.0, description="Perceived credibility score (0 to 100)")
 
 
 class Edge(BaseModel):
@@ -73,17 +75,28 @@ class NetworkGenerateResponse(BaseModel):
 # Spread Simulation Schemas (Person 1)
 # ==============================================================================
 
+class InterventionDetail(BaseModel):
+    """Specific intervention configuration for a target node."""
+    node_id: int = Field(..., description="Target node ID")
+    type: str = Field(
+        default="isolate",
+        description="Intervention type: 'isolate', 'warn', 'fact_check', 'community_alert'"
+    )
+
+
 class SpreadStep(BaseModel):
-    """Snapshot of rumour propagation state at a discrete time step."""
+    """Snapshot of rumour propagation and antidote state at a discrete time step."""
     step: int = Field(..., description="Time step index (0 = initial state)")
     active_count: int = Field(..., description="Number of actively spreading nodes at this step")
     contained_count: int = Field(..., description="Number of contained nodes at this step")
     unaware_count: int = Field(..., description="Number of unaware nodes at this step")
+    antidote_count: int = Field(default=0, description="Number of antidote-aware nodes at this step")
     newly_infected: List[int] = Field(default_factory=list, description="Nodes exposed at this specific step")
+    newly_corrected: List[int] = Field(default_factory=list, description="Nodes gaining antidote awareness at this step")
 
 
 class SimulationRunRequest(BaseModel):
-    """Request payload to simulate rumour propagation."""
+    """Request payload to simulate rumour propagation and antidote spread."""
     nodes: List[Node] = Field(..., description="Network nodes")
     edges: List[Edge] = Field(..., description="Network edges")
     source: int = Field(..., description="Node ID that starts spreading the rumour")
@@ -96,6 +109,25 @@ class SimulationRunRequest(BaseModel):
     interventions: List[int] = Field(
         default_factory=list,
         description="List of node IDs selected for containment intervention"
+    )
+    budget: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Optional active intervention budget constraint"
+    )
+    intervention_details: Optional[List[InterventionDetail]] = Field(
+        default=None,
+        description="Detailed intervention types per node ('isolate', 'warn', 'fact_check', 'community_alert')"
+    )
+    antidote_sources: List[int] = Field(
+        default_factory=list,
+        description="List of node IDs initiating Antidote corrective information"
+    )
+    antidote_probability: float = Field(
+        default=0.4,
+        ge=0.0,
+        le=1.0,
+        description="Transmission probability per edge for Antidote correction"
     )
     seed: Optional[int] = Field(
         default=None,
@@ -110,14 +142,19 @@ class SimulationRunRequest(BaseModel):
 
 
 class SimulationRunResponse(BaseModel):
-    """Structured response from a single rumour propagation simulation."""
+    """Structured response from a rumour and antidote propagation simulation."""
     source: int = Field(..., description="Initial rumour source node ID")
     interventions: List[int] = Field(..., description="Nodes subjected to containment intervention")
-    spread_history: List[SpreadStep] = Field(..., description="Step-by-step progression of the rumour")
-    final_reach: int = Field(..., description="Total number of users who were exposed/active at the end")
+    spread_history: List[SpreadStep] = Field(..., description="Step-by-step progression of the rumour and antidote")
+    final_reach: int = Field(..., description="Total number of users exposed/active at the end")
+    antidote_reach: int = Field(default=0, description="Total users aware of Antidote correction")
     final_node_states: Dict[str, NodeState] = Field(
         ...,
         description="Mapping from string node ID to final NodeState"
+    )
+    antidote_states: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping from string node ID to Antidote awareness ('aware' / 'unaware')"
     )
     steps_taken: int = Field(..., description="Number of time steps until propagation ceased")
     total_nodes: int = Field(..., description="Total nodes in the network")

@@ -53,3 +53,26 @@ def test_serialization_and_deserialization():
     assert reconstructed_g.number_of_nodes() == orig_g.number_of_nodes()
     assert reconstructed_g.number_of_edges() == orig_g.number_of_edges()
     assert sorted(reconstructed_g.edges()) == sorted(orig_g.edges())
+
+
+def test_per_node_speed_and_reliability_attributes():
+    """Verify per-node speed and reliability attributes are randomized within range, reproducible by fixed seed, and varied across distinct seeds."""
+    g1, d1 = generate_network(num_users=30, seed=42)
+
+    speeds = [n["speed"] for n in d1["nodes"]]
+    reliabilities = [n["reliability"] for n in d1["nodes"]]
+
+    assert all(0.5 <= s <= 1.5 for s in speeds)
+    assert all(20.0 <= r <= 95.0 for r in reliabilities)
+    assert len(set(speeds)) > 1
+    assert len(set(reliabilities)) > 1
+
+    # Fixed seed produces identical node attributes
+    g2, d2 = generate_network(num_users=30, seed=42)
+    assert speeds == [n["speed"] for n in d2["nodes"]]
+    assert reliabilities == [n["reliability"] for n in d2["nodes"]]
+
+    # Different seeds produce different attributes
+    g3, d3 = generate_network(num_users=30, seed=999)
+    assert speeds != [n["speed"] for n in d3["nodes"]] or reliabilities != [n["reliability"] for n in d3["nodes"]]
+

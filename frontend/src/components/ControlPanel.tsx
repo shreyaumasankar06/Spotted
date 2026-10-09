@@ -149,7 +149,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <div className="flex justify-between items-center text-[11px] mb-1">
                 <label className="text-[#B7A9C9] font-medium">Intervention Budget (k)</label>
                 <span className="text-[#39F5A5] font-mono font-bold bg-[#1B1223] px-2 py-0.5 rounded border border-[#261A33]">
-                  {budget} nodes
+                  {budget} max
                 </span>
               </div>
               <input
@@ -220,7 +220,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               <div className="mt-2 space-y-2">
                 <div>
                   <label className="block text-[10px] text-[#B7A9C9] mb-1">
-                    Random Seed (Optional)
+                    Random Seed (Reproducibility)
                   </label>
                   <input
                     type="number"
@@ -229,6 +229,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     onChange={(e) => setSeed(e.target.value ? Number(e.target.value) : undefined)}
                     className="w-full bg-[#1B1223] border border-[#261A33] text-[#F8F3FF] text-xs rounded-xl px-2.5 py-1.5 focus:border-[#A855F7] focus:outline-none font-mono"
                   />
+                  <p className="text-[10px] text-[#756B80] mt-1.5 leading-relaxed">
+                    <strong className="text-[#A855F7]">Reproducibility Guarantee:</strong> The same seed, topology, and simulation settings reproduce identical rumour spread trajectories. Changing the seed alters stochastic spreading draws without changing node layout or attributes.
+                  </p>
                 </div>
               </div>
             )}

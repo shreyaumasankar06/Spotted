@@ -50,9 +50,18 @@ def generate_network(
         nodes_in_comm = list(range(current_id, current_id + size))
         community_nodes.append(nodes_in_comm)
         
-        # Add nodes with community attribute
+        # Add nodes with community attribute, speed, and reliability
         for node in nodes_in_comm:
-            G.add_node(node, community=comm_idx, label=f"User {node}")
+            # Deterministic speed (0.5 to 1.5) and reliability (20.0 to 95.0) based on RNG
+            node_speed = round(rng.uniform(0.5, 1.5), 2)
+            node_reliability = round(rng.uniform(20.0, 95.0), 1)
+            G.add_node(
+                node,
+                community=comm_idx,
+                label=f"User {node}",
+                speed=node_speed,
+                reliability=node_reliability
+            )
         
         # Intra-community connectivity: small-world ring + shortcuts
         if size > 1:
@@ -119,7 +128,9 @@ def graph_to_dict(graph: nx.Graph) -> Dict[str, Any]:
             "label": data.get("label", f"User {node_id}"),
             "state": data.get("state", "unaware"),
             "community": data.get("community", 0),
-            "degree": graph.degree(node_id)
+            "degree": graph.degree(node_id),
+            "speed": data.get("speed", 1.0),
+            "reliability": data.get("reliability", 50.0)
         })
 
     edges = []
@@ -152,7 +163,15 @@ def dict_to_graph(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> n
         node_id = int(n["id"] if isinstance(n, dict) else n.id)
         comm = n.get("community") if isinstance(n, dict) else getattr(n, "community", None)
         lbl = n.get("label") if isinstance(n, dict) else getattr(n, "label", None)
-        G.add_node(node_id, community=comm, label=lbl or f"User {node_id}")
+        spd = n.get("speed", 1.0) if isinstance(n, dict) else getattr(n, "speed", 1.0)
+        rel = n.get("reliability", 50.0) if isinstance(n, dict) else getattr(n, "reliability", 50.0)
+        G.add_node(
+            node_id,
+            community=comm,
+            label=lbl or f"User {node_id}",
+            speed=spd,
+            reliability=rel
+        )
 
     for e in edges:
         src = int(e["source"] if isinstance(e, dict) else e.source)
