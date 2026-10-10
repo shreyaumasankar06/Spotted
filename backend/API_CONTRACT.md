@@ -36,6 +36,7 @@ All endpoints are prefixed with `/api`.
 | `GET` | `/api/health` | Service health status | Shared Integration |
 | `POST` | `/api/network/generate` | Generate synthetic social network | Person 1 |
 | `POST` | `/api/simulation/run` | Simulate rumour propagation step-by-step | Person 1 |
+| `POST` | `/api/antidote/spread` | Probabilistically spread corrective Antidote | Person 1 |
 | `POST` | `/api/interventions/compare` | Benchmark baseline and greedy strategies | Person 2 |
 
 ---
@@ -185,7 +186,60 @@ All endpoints are prefixed with `/api`.
 
 ---
 
-### 4.4 Intervention Comparison
+### 4.4 Antidote Propagation
+
+- **Method:** `POST`
+- **Path:** `/api/antidote/spread`
+- **Module Owner:** Person 1 (`backend/spread_simulator.py`)
+
+#### Request Payload
+```json
+{
+  "nodes": [
+    { "id": 0, "label": "User 0", "state": "unaware", "speed": 1.0, "reliability": 85.0 },
+    { "id": 1, "label": "User 1", "state": "unaware", "speed": 0.8, "reliability": 40.0 }
+  ],
+  "edges": [
+    { "source": 0, "target": 1 }
+  ],
+  "antidote_source": 0,
+  "probability": 0.35,
+  "existing_antidote_states": { "0": "unaware" },
+  "seed": 42
+}
+```
+
+| Field | Type | Required | Constraints | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `nodes` | array[Node] | Yes | $\ge 2$ nodes | Network nodes list with `speed` and `reliability` |
+| `edges` | array[Edge] | Yes | $\ge 1$ edge | Network edges list |
+| `antidote_source` | integer | Yes | Must exist in `nodes` | Node ID initiating the Antidote |
+| `probability` | float | Yes | $0.0 \le p \le 1.0$ | Base spreading probability (reused from rumour probability) |
+| `existing_antidote_states` | map[string, string] | No (Default: null) | Valid node states | Current Antidote awareness states (`aware` / `unaware`) |
+| `seed` | integer / null | No (Default: null) | Any integer | Seed for reproducible propagation |
+
+#### Response (200 OK)
+```json
+{
+  "antidote_source": 0,
+  "antidote_states": {
+    "0": "aware",
+    "1": "aware"
+  },
+  "all_aware_nodes": [0, 1],
+  "history": [
+    { "step": 0, "newly_corrected": [0], "total_aware": 1 },
+    { "step": 1, "newly_corrected": [1], "total_aware": 2 }
+  ],
+  "steps_taken": 1,
+  "total_aware": 2,
+  "message": "Antidote spread from User #0 reached 2 total users."
+}
+```
+
+---
+
+### 4.5 Intervention Comparison
 
 - **Method:** `POST`
 - **Path:** `/api/interventions/compare`

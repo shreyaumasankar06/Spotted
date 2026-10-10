@@ -13,6 +13,7 @@ import {
   generateNetwork,
   runSimulation,
   compareInterventions,
+  spreadAntidote,
   Node,
   Edge,
   NodeState,
@@ -73,9 +74,10 @@ export const App: React.FC = () => {
   const [interventionDetails, setInterventionDetails] = useState<Record<number, InterventionType>>({});
   const [auditLog, setAuditLog] = useState<InterventionAuditEntry[]>([]);
 
-  // Antidote configuration state
-  const antidoteSources: number[] = [];
-  const antidoteProbability = 0.5;
+  // Antidote propagation state
+  const [antidoteSources, setAntidoteSources] = useState<number[]>([]);
+  const [antidoteStates, setAntidoteStates] = useState<Record<string, 'aware' | 'unaware'>>({});
+  const [isSpreadingAntidote, setIsSpreadingAntidote] = useState<boolean>(false);
 
   // Collapsible Analytics Bottom Drawer State
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
@@ -173,6 +175,8 @@ export const App: React.FC = () => {
       setInterventionDetails({});
       setAuditLog([]);
       setNodeStates({});
+      setAntidoteSources([]);
+      setAntidoteStates({});
       setSelectedStrategyKey('none');
       setInspectedNodeId(null);
       setCurrentStepIndex(0);
@@ -213,11 +217,14 @@ export const App: React.FC = () => {
         budget: budget,
         intervention_details: formattedDetails,
         antidote_sources: antidoteSources,
-        antidote_probability: antidoteProbability,
+        antidote_probability: probability,
         seed: seed !== undefined ? seed + 10 : undefined,
       });
       setSimulation(resp);
       setNodeStates(resp.final_node_states);
+      if (resp.antidote_states && Object.keys(resp.antidote_states).length > 0) {
+        setAntidoteStates((prev) => ({ ...prev, ...resp.antidote_states }));
+      }
       setContainedNodes(resp.interventions);
       setCurrentStepIndex(resp.spread_history.length > 0 ? resp.spread_history.length - 1 : 0);
       setIsPlaying(false);
@@ -327,6 +334,71 @@ export const App: React.FC = () => {
     handleRunSimulation(containedNodes);
   };
 
+  const handleSpreadAntidote = async (nodeId: number) => {
+    if (nodes.length === 0) return;
+
+    // Prevent duplicate activation if node is already correction-aware
+    if (antidoteStates[String(nodeId)] === 'aware') {
+      return;
+    }
+
+    setIsSpreadingAntidote(true);
+    setErrorMessage(null);
+
+    // Rule 1: Mark the selected source node green immediately when the Antidote is activated
+    const updatedSources = antidoteSources.includes(nodeId)
+      ? antidoteSources
+      : [...antidoteSources, nodeId];
+    setAntidoteSources(updatedSources);
+    setAntidoteStates((prev) => ({ ...prev, [String(nodeId)]: 'aware' }));
+
+    try {
+      // Reuse existing rumour spreading probability and random-number generation architecture
+      const spreadSeed = seed !== undefined ? seed + 100 + updatedSources.length * 13 : undefined;
+
+      const resp = await spreadAntidote({
+        nodes,
+        edges,
+        antidote_source: nodeId,
+        probability, // Reuses existing rumour spreading probability
+        existing_antidote_states: antidoteStates,
+        seed: spreadSeed,
+      });
+
+      // Animate step-by-step level progression so green signal appears as successful transmissions occur
+      if (resp.history && resp.history.length > 1) {
+        for (let i = 1; i < resp.history.length; i++) {
+          const stepInfo = resp.history[i];
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          setAntidoteStates((prev) => {
+            const next = { ...prev };
+            stepInfo.newly_corrected.forEach((cid) => {
+              next[String(cid)] = 'aware';
+            });
+            return next;
+          });
+        }
+      }
+
+      // Finalize with backend response states
+      setAntidoteStates(resp.antidote_states);
+
+      // Keep simulation object updated with antidote awareness and reach
+      setSimulation((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          antidote_states: resp.antidote_states,
+          antidote_reach: resp.total_aware,
+        };
+      });
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Antidote propagation failed.');
+    } finally {
+      setIsSpreadingAntidote(false);
+    }
+  };
+
   const totalSteps = simulation?.spread_history?.length || 1;
 
   return (
@@ -431,8 +503,11 @@ export const App: React.FC = () => {
               containedNodes={containedNodes}
               pendingInterventions={pendingInterventions}
               antidoteNodes={antidoteSources}
+              antidoteStates={antidoteStates}
               simulation={simulation}
               onSelectNode={handleSelectNodeFromGraph}
+              onSpreadAntidote={handleSpreadAntidote}
+              isSpreadingAntidote={isSpreadingAntidote}
             />
           )}
 
@@ -441,6 +516,11 @@ export const App: React.FC = () => {
             simulation={simulation}
             totalNodes={nodes.length}
             containedCount={containedNodes.length}
+            antidoteCount={
+              Object.values(antidoteStates).filter((s) => s === 'aware').length ||
+              simulation?.antidote_reach ||
+              0
+            }
           />
 
           {/* Top-Right Control Console & Intervention Mode Dock */}
@@ -539,6 +619,9 @@ export const App: React.FC = () => {
             simulation={simulation}
             probability={probability}
             seed={seed}
+            antidoteStates={antidoteStates}
+            onSpreadAntidote={handleSpreadAntidote}
+            isSpreadingAntidote={isSpreadingAntidote}
             onClose={() => setInspectedNodeId(null)}
             onSetSource={handleSetRumourSource}
             onToggleContained={handleToggleContainedNode}

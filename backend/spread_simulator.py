@@ -18,7 +18,7 @@ def simulate_spread(
     budget: Optional[int] = None,
     intervention_details: Optional[List[Dict[str, Any]]] = None,
     antidote_sources: Optional[List[int]] = None,
-    antidote_probability: float = 0.4,
+    antidote_probability: Optional[float] = None,
     seed: Optional[int] = None,
     max_steps: int = 50
 ) -> Dict[str, Any]:
@@ -31,13 +31,14 @@ def simulate_spread(
     3. Node Reliability: Perceived credibility R(u) in [0, 100] scales effective transmission
        credibility: Credibility_Multiplier = 0.5 + 0.5 * (R(u) / 100).
     4. Antidote Mechanism: Corrective information spreads independently from antidote sources.
+       Reuses base spreading probability by default unless specifically overridden.
     5. Interventions & Budget:
        - Strictly enforces budget k. Rejects requests exceeding budget or containing duplicates.
        - 'isolate': Transmission probability set to 0. Node state = 'contained'.
        - 'warn': Forwarding probability scaled by 0.3.
        - 'fact_check': Forwarding probability set to 0 AND node becomes an Antidote source.
        - 'community_alert': Forwarding probability of all direct neighbours scaled by 0.5.
-       
+        
     Args:
         graph: NetworkX undirected Graph representing the social network.
         source: Node ID initiating the rumour.
@@ -46,7 +47,7 @@ def simulate_spread(
         budget: Optional maximum intervention budget constraint.
         intervention_details: Optional list of dicts with 'node_id' and 'type'.
         antidote_sources: Optional list of node IDs starting antidote spread.
-        antidote_probability: Base antidote spreading probability (0.0 to 1.0).
+        antidote_probability: Optional antidote spreading probability (defaults to rumour probability).
         seed: Optional random seed for reproducible simulation.
         max_steps: Maximum discrete steps to simulate.
         
@@ -57,8 +58,10 @@ def simulate_spread(
         raise ValueError(f"Source node {source} does not exist in graph.")
     if not (0.0 <= probability <= 1.0):
         raise ValueError(f"Spreading probability must be between 0.0 and 1.0, got {probability}")
-    if not (0.0 <= antidote_probability <= 1.0):
-        raise ValueError(f"Antidote probability must be between 0.0 and 1.0, got {antidote_probability}")
+
+    antidote_base_prob = antidote_probability if antidote_probability is not None else probability
+    if not (0.0 <= antidote_base_prob <= 1.0):
+        raise ValueError(f"Antidote probability must be between 0.0 and 1.0, got {antidote_base_prob}")
 
     # Check for duplicate targets in list representation
     if isinstance(interventions, list) and len(interventions) != len(set(interventions)):
@@ -165,7 +168,7 @@ def simulate_spread(
 
             # Reliability Credibility Multiplier
             credibility_mult = 0.5 + 0.5 * (spreader_rel / 100.0)
-            eff_antidote_prob = min(1.0, max(0.0, antidote_probability * credibility_mult))
+            eff_antidote_prob = min(1.0, max(0.0, antidote_base_prob * credibility_mult))
 
             for nbr in sorted(graph.neighbors(spreader)):
                 if antidote_states[nbr] == "unaware":
@@ -250,3 +253,112 @@ def simulate_spread(
         "steps_taken": step,
         "total_nodes": total_nodes
     }
+
+
+def simulate_antidote_spread(
+    graph: nx.Graph,
+    source: int,
+    probability: float,
+    existing_antidote_states: Optional[Dict[str, str]] = None,
+    seed: Optional[int] = None,
+    max_steps: int = 50
+) -> Dict[str, Any]:
+    """Simulate probabilistic Antidote spread from a starting source node across network levels.
+
+    Propagation Rules:
+    1. The source node becomes correction-aware immediately.
+    2. Transmission to immediate neighbours is probabilistic, using the exact same transmission
+       probability logic and random-number generation mechanism as rumour propagation.
+    3. Transmission succeeds if random() < P_eff, where:
+       P_eff = min(1.0, max(0.0, probability * (0.5 + 0.5 * (spreader_reliability / 100.0)))).
+    4. Successful neighbours become correction-aware and attempt to spread to their neighbours at the next level.
+    5. Transmission is NOT guaranteed for all neighbours; some succeed and others fail.
+    6. Stops when no further transmissions succeed or no eligible nodes remain.
+    7. Already-aware nodes cannot receive repeatedly (preventing infinite loops).
+    8. Preserves existing graph topology and edges.
+    9. Does not erase existing rumour states; rumour exposure history is preserved.
+    """
+    if source not in graph:
+        raise ValueError(f"Antidote source node {source} does not exist in graph.")
+    if not (0.0 <= probability <= 1.0):
+        raise ValueError(f"Spreading probability must be between 0.0 and 1.0, got {probability}")
+
+    rng = random.Random(seed)
+    total_nodes = graph.number_of_nodes()
+
+    # Initialize antidote states
+    antidote_states: Dict[int, str] = {}
+    for node in graph.nodes():
+        if existing_antidote_states:
+            prev = existing_antidote_states.get(str(node), existing_antidote_states.get(node, "unaware"))
+            antidote_states[node] = prev
+        else:
+            antidote_states[node] = "unaware"
+
+    # Mark source node correction-aware immediately
+    antidote_states[source] = "aware"
+
+    history: List[Dict[str, Any]] = [{
+        "step": 0,
+        "newly_corrected": [source],
+        "total_aware": sum(1 for s in antidote_states.values() if s == "aware")
+    }]
+
+    active_spreaders: Set[int] = {source}
+    step = 0
+
+    while active_spreaders and step < max_steps:
+        step += 1
+        newly_corrected_step: Set[int] = set()
+
+        for spreader in sorted(active_spreaders):
+            spreader_data = graph.nodes[spreader]
+            spreader_speed = spreader_data.get("speed", 1.0)
+            spreader_rel = spreader_data.get("reliability", 50.0)
+
+            # Node Speed Timing Rule
+            interval = max(1, int(round(1.0 / spreader_speed))) if spreader_speed < 1.0 else 1
+            if step % interval != 0 and step > 1:
+                continue
+
+            # Reliability Credibility Multiplier (exact same logic as rumour simulator)
+            credibility_mult = 0.5 + 0.5 * (spreader_rel / 100.0)
+            eff_prob = min(1.0, max(0.0, probability * credibility_mult))
+
+            for nbr in sorted(graph.neighbors(spreader)):
+                if antidote_states[nbr] == "unaware":
+                    # Determine whether transmission succeeds probabilistically
+                    if eff_prob >= 1.0 or (eff_prob > 0.0 and rng.random() < eff_prob):
+                        newly_corrected_step.add(nbr)
+
+        # Mark newly corrected nodes as aware
+        for node in newly_corrected_step:
+            antidote_states[node] = "aware"
+
+        if not newly_corrected_step:
+            break
+
+        history.append({
+            "step": step,
+            "newly_corrected": sorted(list(newly_corrected_step)),
+            "total_aware": sum(1 for s in antidote_states.values() if s == "aware")
+        })
+
+        # Active spreaders for next level are newly corrected nodes that have unaware neighbours
+        active_spreaders = {
+            n for n in newly_corrected_step
+            if any(antidote_states[nbr] == "unaware" for nbr in graph.neighbors(n))
+        }
+
+    all_aware_nodes = [n for n, s in antidote_states.items() if s == "aware"]
+
+    return {
+        "antidote_source": source,
+        "antidote_states": {str(n): state for n, state in antidote_states.items()},
+        "all_aware_nodes": sorted(all_aware_nodes),
+        "history": history,
+        "steps_taken": step,
+        "total_aware": len(all_aware_nodes),
+        "message": f"Antidote spread from User #{source} reached {len(all_aware_nodes)} total users."
+    }
+

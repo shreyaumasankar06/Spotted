@@ -123,11 +123,11 @@ class SimulationRunRequest(BaseModel):
         default_factory=list,
         description="List of node IDs initiating Antidote corrective information"
     )
-    antidote_probability: float = Field(
-        default=0.4,
+    antidote_probability: Optional[float] = Field(
+        default=None,
         ge=0.0,
         le=1.0,
-        description="Transmission probability per edge for Antidote correction"
+        description="Transmission probability per edge for Antidote correction (defaults to rumour probability)"
     )
     seed: Optional[int] = Field(
         default=None,
@@ -139,6 +139,51 @@ class SimulationRunRequest(BaseModel):
         le=200,
         description="Safety ceiling on discrete propagation steps"
     )
+
+
+class AntidoteSpreadRequest(BaseModel):
+    """Request payload to initiate probabilistic Antidote spread from a starting node."""
+    nodes: List[Node] = Field(..., description="Network nodes")
+    edges: List[Edge] = Field(..., description="Network edges")
+    antidote_source: int = Field(..., description="Node ID initiating the corrective Antidote")
+    probability: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Base spreading probability per edge (reused from rumour simulator)"
+    )
+    existing_antidote_states: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Optional map of current node Antidote awareness states"
+    )
+    seed: Optional[int] = Field(
+        default=None,
+        description="Optional seed for deterministic simulation"
+    )
+    max_steps: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Maximum discrete steps/levels to propagate"
+    )
+
+
+class AntidoteStepInfo(BaseModel):
+    """Snapshot of newly corrected nodes at each level."""
+    step: int = Field(..., description="Propagation level / step index")
+    newly_corrected: List[int] = Field(..., description="Node IDs that received Antidote at this level")
+    total_aware: int = Field(..., description="Cumulative Antidote-aware count")
+
+
+class AntidoteSpreadResponse(BaseModel):
+    """Response payload for probabilistic Antidote spread."""
+    antidote_source: int = Field(..., description="Initial Antidote source node ID")
+    antidote_states: Dict[str, str] = Field(..., description="Mapping from string node ID to Antidote state ('aware' / 'unaware')")
+    all_aware_nodes: List[int] = Field(..., description="List of all nodes that are correction-aware")
+    history: List[AntidoteStepInfo] = Field(..., description="Progression across propagation levels")
+    steps_taken: int = Field(..., description="Number of levels traversed before propagation ceased")
+    total_aware: int = Field(..., description="Total nodes aware of the correction")
+    message: str = Field(..., description="Informative status message")
 
 
 class SimulationRunResponse(BaseModel):

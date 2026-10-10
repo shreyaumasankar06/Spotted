@@ -12,8 +12,11 @@ interface NetworkGraphProps {
   containedNodes?: number[];
   pendingInterventions?: number[];
   antidoteNodes?: number[];
+  antidoteStates?: Record<string, 'aware' | 'unaware'>;
   simulation?: SimulationRunResponse | null;
   onSelectNode?: (nodeId: number) => void;
+  onSpreadAntidote?: (nodeId: number) => void;
+  isSpreadingAntidote?: boolean;
 }
 
 export const NetworkGraph: React.FC<NetworkGraphProps> = ({
@@ -24,12 +27,16 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
   containedNodes = [],
   pendingInterventions = [],
   antidoteNodes = [],
+  antidoteStates = {},
   simulation,
   onSelectNode,
+  onSpreadAntidote,
+  isSpreadingAntidote = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const onSelectNodeRef = useRef(onSelectNode);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep latest onSelectNode callback ref stable
   useEffect(() => {
@@ -135,8 +142,12 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
       wheelSensitivity: 0.25,
     });
 
-    // Event Listener: Hover tooltip
+    // Event Listener: Hover tooltip with smooth transition debounce
     cy.on('mouseover', 'node', (evt) => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
       const nodeObj = evt.target;
       const nodeId = Number(nodeObj.id());
       const renderedPos = nodeObj.renderedPosition();
@@ -152,7 +163,12 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
     });
 
     cy.on('mouseout', 'node', () => {
-      setHoverInfo(null);
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+      hoverTimeoutRef.current = setTimeout(() => {
+        setHoverInfo(null);
+      }, 350);
     });
 
     // Event Listener: Tap / Click node (does not rerun layout or move nodes)
@@ -167,12 +183,33 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
     cyRef.current = cy;
 
     return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
       if (cyRef.current) {
         cyRef.current.destroy();
         cyRef.current = null;
       }
     };
   }, [nodes, edges]);
+
+  // Keep tooltip open when mouse is hovering over the tooltip itself
+  const handleMouseEnterTooltip = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  };
+
+  const handleMouseLeaveTooltip = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoverInfo(null);
+    }, 250);
+  };
 
   // 2. In-Place Visual Style Updates (ZERO layout recalculation or node movement)
   useEffect(() => {
@@ -188,14 +225,37 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         const isSource = n.id === sourceNode;
         const isContained = containedNodes.includes(n.id) || state === 'contained';
         const isPending = pendingInterventions.includes(n.id);
-        const isAntidote = antidoteNodes.includes(n.id) || simulation?.antidote_states?.[String(n.id)] === 'aware';
+        const isAntidote =
+          antidoteNodes.includes(n.id) ||
+          antidoteStates[String(n.id)] === 'aware' ||
+          simulation?.antidote_states?.[String(n.id)] === 'aware';
 
         let nodeColor = '#756B80'; // Unaware
         let borderColor = '#4A3E59';
         let borderWidth = 1.5;
         let nodeSize = 22;
 
-        if (isSource) {
+        if (isAntidote) {
+          // Bright green signal for Antidote awareness
+          nodeColor = '#39F5A5';
+          if (isSource) {
+            borderColor = '#FF365E'; // Retain rumour source border
+            borderWidth = 4;
+            nodeSize = 30;
+          } else if (state === 'active') {
+            borderColor = '#FF3CAC'; // Retain rumour active border
+            borderWidth = 3;
+            nodeSize = 25;
+          } else if (isPending) {
+            borderColor = '#A855F7';
+            borderWidth = 3;
+            nodeSize = 26;
+          } else {
+            borderColor = '#22C55E';
+            borderWidth = 3;
+            nodeSize = 24;
+          }
+        } else if (isSource) {
           nodeColor = '#FF365E';
           borderColor = '#FF3CAC';
           borderWidth = 4;
@@ -209,11 +269,6 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
           nodeColor = '#39F5A5';
           borderColor = '#22C55E';
           borderWidth = 3;
-          nodeSize = 24;
-        } else if (isAntidote) {
-          nodeColor = '#39F5A5';
-          borderColor = '#A855F7';
-          borderWidth = 3.5;
           nodeSize = 24;
         } else if (state === 'active') {
           nodeColor = '#FF365E';
@@ -230,7 +285,7 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         });
       });
     });
-  }, [nodes, nodeStates, sourceNode, containedNodes, pendingInterventions, antidoteNodes, simulation]);
+  }, [nodes, nodeStates, sourceNode, containedNodes, pendingInterventions, antidoteNodes, antidoteStates, simulation]);
 
   const handleFit = () => {
     if (cyRef.current) {
@@ -270,6 +325,11 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
         sourceNode={sourceNode ?? 0}
         containedNodes={containedNodes}
         simulation={simulation}
+        antidoteStates={antidoteStates}
+        onSpreadAntidote={onSpreadAntidote}
+        isSpreadingAntidote={isSpreadingAntidote}
+        onMouseEnter={handleMouseEnterTooltip}
+        onMouseLeave={handleMouseLeaveTooltip}
       />
 
       {/* Floating Canvas Controls (Bottom Left) */}
@@ -316,8 +376,8 @@ export const NetworkGraph: React.FC<NetworkGraphProps> = ({
           <span>Spreading</span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#39F5A5] shadow-[0_0_6px_#39F5A5]"></span>
-          <span>Contained</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-[#39F5A5] border border-[#22C55E] shadow-[0_0_6px_#39F5A5]"></span>
+          <span className="text-[#39F5A5] font-medium">Antidote / Contained</span>
         </div>
         <div className="flex items-center space-x-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#A855F7] border border-[#FF3CAC]"></span>

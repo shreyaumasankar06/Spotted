@@ -2,7 +2,7 @@
 
 import pytest
 import networkx as nx
-from spread_simulator import simulate_spread
+from spread_simulator import simulate_spread, simulate_antidote_spread
 from network_generator import generate_network
 
 
@@ -178,3 +178,87 @@ def test_fixed_seed_produces_reproducible_outcomes(sample_graph):
     assert res1["steps_taken"] == res2["steps_taken"]
     assert res1["final_node_states"] == res2["final_node_states"]
     assert res1["spread_history"] == res2["spread_history"]
+
+
+def test_simulate_antidote_spread_any_node(sample_graph):
+    """Any node can initiate Antidote propagation and becomes correction-aware."""
+    # Source node 7 is unaware of any rumour
+    res = simulate_antidote_spread(
+        graph=sample_graph,
+        source=7,
+        probability=1.0,
+        seed=42
+    )
+    assert res["antidote_source"] == 7
+    assert res["antidote_states"]["7"] == "aware"
+    assert res["total_aware"] >= 1
+    assert 7 in res["all_aware_nodes"]
+
+
+def test_simulate_antidote_spread_probabilistic():
+    """Antidote spread must be probabilistic: probability 0 only keeps source aware; probability 1 reaches connected nodes."""
+    g = nx.Graph()
+    g.add_edge(0, 1)
+    g.add_edge(1, 2)
+    for n in g.nodes():
+        g.nodes[n]["speed"] = 1.0
+        g.nodes[n]["reliability"] = 80.0
+
+    # Probability 0.0: only source becomes aware
+    res_zero = simulate_antidote_spread(g, source=0, probability=0.0, seed=1)
+    assert res_zero["total_aware"] == 1
+    assert res_zero["antidote_states"]["0"] == "aware"
+    assert res_zero["antidote_states"]["1"] == "unaware"
+    assert res_zero["antidote_states"]["2"] == "unaware"
+
+    # Probability 1.0: multi-level spread reaches all connected neighbours
+    res_full = simulate_antidote_spread(g, source=0, probability=1.0, seed=1)
+    assert res_full["total_aware"] == 3
+    assert res_full["antidote_states"]["0"] == "aware"
+    assert res_full["antidote_states"]["1"] == "aware"
+    assert res_full["antidote_states"]["2"] == "aware"
+
+
+def test_simulate_antidote_spread_preserves_rumour_state(sample_graph):
+    """Antidote awareness does not erase rumour exposure history. A node can be both active and antidote aware."""
+    # First, run rumour spread where node 0 infects others
+    rumour_res = simulate_spread(sample_graph, source=0, probability=1.0, seed=42)
+    assert rumour_res["final_node_states"]["0"] == "active"
+    
+    # Node 0 then spreads antidote
+    antidote_res = simulate_antidote_spread(sample_graph, source=0, probability=0.8, seed=42)
+    
+    # Node 0 is now antidote aware, but rumour state remains 'active'
+    assert antidote_res["antidote_states"]["0"] == "aware"
+    assert rumour_res["final_node_states"]["0"] == "active"
+
+
+def test_simulate_antidote_spread_disconnected_components():
+    """Nodes in disconnected components cannot receive the Antidote."""
+    g = nx.Graph()
+    # Component 1: 0 - 1
+    g.add_edge(0, 1)
+    # Component 2: 2 - 3 (disconnected)
+    g.add_edge(2, 3)
+    for n in g.nodes():
+        g.nodes[n]["speed"] = 1.0
+        g.nodes[n]["reliability"] = 90.0
+
+    res = simulate_antidote_spread(g, source=0, probability=1.0, seed=42)
+    assert res["antidote_states"]["0"] == "aware"
+    assert res["antidote_states"]["1"] == "aware"
+    assert res["antidote_states"]["2"] == "unaware"
+    assert res["antidote_states"]["3"] == "unaware"
+    assert res["total_aware"] == 2
+
+
+def test_simulate_antidote_spread_reproducible(sample_graph):
+    """Fixed seed produces identical Antidote spread outcomes."""
+    res1 = simulate_antidote_spread(sample_graph, source=1, probability=0.35, seed=999)
+    res2 = simulate_antidote_spread(sample_graph, source=1, probability=0.35, seed=999)
+
+    assert res1["antidote_states"] == res2["antidote_states"]
+    assert res1["all_aware_nodes"] == res2["all_aware_nodes"]
+    assert res1["total_aware"] == res2["total_aware"]
+    assert res1["steps_taken"] == res2["steps_taken"]
+
