@@ -14,6 +14,9 @@ interface NodeInspectorProps {
   simulation?: SimulationRunResponse | null;
   probability: number;
   seed?: number;
+  antidoteStates?: Record<string, 'aware' | 'unaware'>;
+  onSpreadAntidote?: (nodeId: number) => void;
+  isSpreadingAntidote?: boolean;
   onClose: () => void;
   onSetSource: (id: number) => void;
   onToggleContained: (id: number) => void;
@@ -30,6 +33,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   simulation,
   probability,
   seed,
+  antidoteStates = {},
+  onSpreadAntidote,
+  isSpreadingAntidote = false,
   onClose,
   onSetSource,
   onToggleContained,
@@ -258,6 +264,21 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         <span className="font-mono text-[#F8F3FF] font-medium">{infectionStepText}</span>
       </div>
 
+      {/* Antidote Awareness Status */}
+      <div className="px-3 py-2 rounded-xl bg-[#1B1223]/70 border border-[#261A33] flex items-center justify-between text-xs">
+        <span className="text-[#B7A9C9]">Antidote Awareness</span>
+        {antidoteStates[String(nodeId)] === 'aware' || simulation?.antidote_states?.[String(nodeId)] === 'aware' ? (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase bg-[#39F5A5]/20 text-[#39F5A5] border border-[#39F5A5]/40 flex items-center space-x-1">
+            <Sparkles className="w-3 h-3 text-[#39F5A5]" />
+            <span>Correction-Aware</span>
+          </span>
+        ) : (
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase bg-[#756B80]/20 text-[#B7A9C9] border border-[#756B80]/40">
+            Unaware
+          </span>
+        )}
+      </div>
+
       {/* Estimated Marginal Benefit Widget (Requirement 4) */}
       <div className="p-3 rounded-2xl bg-[#08060B]/80 border border-[#A855F7]/30 space-y-2">
         <div className="flex items-center justify-between">
@@ -300,6 +321,23 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
       {/* Action Buttons */}
       <div className="space-y-2 pt-1">
+        {/* Antidote Action Button */}
+        {antidoteStates[String(nodeId)] === 'aware' || simulation?.antidote_states?.[String(nodeId)] === 'aware' ? (
+          <div className="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-[#39F5A5]/15 text-[#39F5A5] border border-[#39F5A5]/40 flex items-center justify-center space-x-2">
+            <Sparkles className="w-3.5 h-3.5 text-[#39F5A5]" />
+            <span>Antidote Active (Correction-Aware)</span>
+          </div>
+        ) : (
+          <button
+            onClick={() => onSpreadAntidote?.(nodeId)}
+            disabled={isSpreadingAntidote}
+            className="w-full py-2 px-3 rounded-xl text-xs font-semibold bg-[#39F5A5]/20 hover:bg-[#39F5A5]/30 text-[#39F5A5] border border-[#39F5A5]/50 flex items-center justify-center space-x-2 transition-all shadow-[0_0_12px_rgba(57,245,165,0.2)] disabled:opacity-50"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#39F5A5]" />
+            <span>{isSpreadingAntidote ? 'Spreading Antidote...' : 'Spread Antidote'}</span>
+          </button>
+        )}
+
         <button
           onClick={() => onSetSource(nodeId)}
           disabled={isSource}

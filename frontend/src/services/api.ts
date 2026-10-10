@@ -176,3 +176,45 @@ export async function compareInterventions(
   }
   return res.json();
 }
+
+export interface AntidoteStepInfo {
+  step: number;
+  newly_corrected: number[];
+  total_aware: number;
+}
+
+export interface AntidoteSpreadRequest {
+  nodes: Node[];
+  edges: Edge[];
+  antidote_source: number;
+  probability: number;
+  existing_antidote_states?: Record<string, string> | null;
+  seed?: number | null;
+  max_steps?: number;
+}
+
+export interface AntidoteSpreadResponse {
+  antidote_source: number;
+  antidote_states: Record<string, 'aware' | 'unaware'>;
+  all_aware_nodes: number[];
+  history: AntidoteStepInfo[];
+  steps_taken: number;
+  total_aware: number;
+  message: string;
+}
+
+/** Probabilistically spread Antidote corrective information through the network */
+export async function spreadAntidote(
+  payload: AntidoteSpreadRequest
+): Promise<AntidoteSpreadResponse> {
+  const res = await fetch(`${API_BASE_URL}/api/antidote/spread`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Antidote spread failed (${res.status})`);
+  }
+  return res.json();
+}

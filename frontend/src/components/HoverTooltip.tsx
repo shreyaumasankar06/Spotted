@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Shield, Radio, Zap, Award } from 'lucide-react';
+import { User, Shield, Radio, Zap, Award, Sparkles } from 'lucide-react';
 import { Node, Edge, NodeState, SimulationRunResponse } from '../services/api';
 import { getUserFullName } from '../utils/names';
 
@@ -17,6 +17,11 @@ interface HoverTooltipProps {
   sourceNode: number;
   containedNodes: number[];
   simulation?: SimulationRunResponse | null;
+  antidoteStates?: Record<string, 'aware' | 'unaware'>;
+  onSpreadAntidote?: (nodeId: number) => void;
+  isSpreadingAntidote?: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 export const HoverTooltip: React.FC<HoverTooltipProps> = ({
@@ -27,6 +32,11 @@ export const HoverTooltip: React.FC<HoverTooltipProps> = ({
   sourceNode,
   containedNodes,
   simulation,
+  antidoteStates,
+  onSpreadAntidote,
+  isSpreadingAntidote = false,
+  onMouseEnter,
+  onMouseLeave,
 }) => {
   if (!hoverInfo) return null;
 
@@ -43,7 +53,9 @@ export const HoverTooltip: React.FC<HoverTooltipProps> = ({
     ? 'contained'
     : nodeStates[String(nodeId)] || targetNode.state || 'unaware';
 
-  const isAntidoteAware = simulation?.antidote_states?.[String(nodeId)] === 'aware';
+  const isAntidoteAware =
+    antidoteStates?.[String(nodeId)] === 'aware' ||
+    simulation?.antidote_states?.[String(nodeId)] === 'aware';
 
   const speed = targetNode.speed ?? 1.0;
   const reliability = targetNode.reliability ?? 50.0;
@@ -91,7 +103,7 @@ export const HoverTooltip: React.FC<HoverTooltipProps> = ({
 
   // Position offset to prevent mouse occlusion or clipping at viewport boundary
   const tooltipWidth = 270;
-  const tooltipHeight = 250;
+  const tooltipHeight = 270;
   const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
   const screenHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
 
@@ -108,7 +120,9 @@ export const HoverTooltip: React.FC<HoverTooltipProps> = ({
   return (
     <div
       style={{ left: `${leftPos}px`, top: `${topPos}px` }}
-      className="fixed z-50 w-68 glass-panel p-3.5 rounded-2xl border border-[#A855F7]/30 shadow-[0_16px_40px_rgba(0,0,0,0.85)] pointer-events-none transition-all duration-150 animate-in fade-in zoom-in-95 text-xs space-y-2"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className="fixed z-50 w-68 glass-panel p-3.5 rounded-2xl border border-[#A855F7]/30 shadow-[0_16px_40px_rgba(0,0,0,0.85)] pointer-events-auto transition-all duration-150 animate-in fade-in zoom-in-95 text-xs space-y-2"
     >
       {/* Header: Name & ID */}
       <div className="flex items-center justify-between pb-1.5 border-b border-[#261A33]">
@@ -181,7 +195,7 @@ export const HoverTooltip: React.FC<HoverTooltipProps> = ({
           <span className="text-[9px] text-[#B7A9C9] block">Antidote Aware</span>
           <span
             className={`font-bold font-mono ${
-              isAntidoteAware ? 'text-[#A855F7]' : 'text-[#756B80]'
+              isAntidoteAware ? 'text-[#39F5A5]' : 'text-[#756B80]'
             }`}
           >
             {isAntidoteAware ? 'Aware' : 'Unaware'}
@@ -192,6 +206,29 @@ export const HoverTooltip: React.FC<HoverTooltipProps> = ({
       {/* Eligibility Badge */}
       <div className={`px-2 py-0.5 rounded-xl text-[10px] font-medium border text-center ${eligibilityColor}`}>
         {eligibilityText}
+      </div>
+
+      {/* Antidote Action */}
+      <div className="pt-0.5">
+        {isAntidoteAware ? (
+          <div className="w-full py-1.5 px-2 rounded-xl bg-[#39F5A5]/15 border border-[#39F5A5]/40 text-[#39F5A5] text-[11px] font-bold text-center flex items-center justify-center space-x-1.5 shadow-[0_0_10px_rgba(57,245,165,0.15)]">
+            <Sparkles className="w-3 h-3 text-[#39F5A5]" />
+            <span>Correction-Aware (Active)</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSpreadAntidote?.(nodeId);
+            }}
+            disabled={isSpreadingAntidote}
+            className="w-full py-1.5 px-2 rounded-xl bg-[#39F5A5]/20 hover:bg-[#39F5A5]/30 active:scale-95 border border-[#39F5A5]/60 text-[#39F5A5] hover:text-white text-[11px] font-bold transition-all flex items-center justify-center space-x-1.5 shadow-[0_0_12px_rgba(57,245,165,0.25)] cursor-pointer disabled:opacity-50"
+          >
+            <Sparkles className="w-3 h-3 text-[#39F5A5]" />
+            <span>{isSpreadingAntidote ? 'Spreading Antidote...' : 'Spread Antidote'}</span>
+          </button>
+        )}
       </div>
     </div>
   );

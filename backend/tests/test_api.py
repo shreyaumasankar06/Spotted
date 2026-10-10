@@ -71,3 +71,31 @@ def test_intervention_compare_endpoint():
     assert "strategies" in comp_data
     assert "best_strategy" in comp_data
     assert "greedy" in comp_data["strategies"]
+
+
+def test_antidote_spread_endpoint():
+    """Verify POST /api/antidote/spread executes probabilistic antidote propagation."""
+    net_resp = client.post("/api/network/generate", json={"num_users": 20, "seed": 42})
+    net_data = net_resp.json()["network"]
+
+    # Choose a node to initiate antidote (can be any node, e.g. node 5)
+    antidote_payload = {
+        "nodes": net_data["nodes"],
+        "edges": net_data["edges"],
+        "antidote_source": 5,
+        "probability": 0.45,
+        "seed": 123,
+        "max_steps": 25
+    }
+    response = client.post("/api/antidote/spread", json=antidote_payload)
+    assert response.status_code == 200
+    res_data = response.json()
+    assert res_data["antidote_source"] == 5
+    assert res_data["antidote_states"]["5"] == "aware"
+    assert res_data["total_aware"] >= 1
+    assert len(res_data["history"]) >= 1
+
+    # Verify invalid source node returns 400 Bad Request
+    invalid_payload = {**antidote_payload, "antidote_source": 9999}
+    err_resp = client.post("/api/antidote/spread", json=invalid_payload)
+    assert err_resp.status_code == 400

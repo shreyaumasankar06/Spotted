@@ -12,13 +12,15 @@ import networkx as nx
 
 def generate_network(
     num_users: int = 50,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    attribute_seed: Optional[int] = None
 ) -> Tuple[nx.Graph, Dict[str, Any]]:
     """Generate a synthetic social network with realistic community structure and bridges.
     
     Args:
         num_users: Number of user nodes (between 5 and 1000).
-        seed: Optional random seed for reproducible network generation.
+        seed: Optional random seed for reproducible network topology generation.
+        attribute_seed: Optional separate random seed for per-node speed and reliability.
         
     Returns:
         Tuple[nx.Graph, Dict[str, Any]]: 
@@ -32,6 +34,8 @@ def generate_network(
         raise ValueError(f"num_users must be between 5 and 1000, got {num_users}")
 
     rng = random.Random(seed)
+    # Independent RNG stream for node attributes to separate topology from attribute randomness
+    attr_rng = random.Random(attribute_seed if attribute_seed is not None else (seed + 9999 if seed is not None else None))
 
     # Determine number of communities (2 to 6 based on size)
     num_communities = max(2, min(6, num_users // 8))
@@ -52,9 +56,9 @@ def generate_network(
         
         # Add nodes with community attribute, speed, and reliability
         for node in nodes_in_comm:
-            # Deterministic speed (0.5 to 1.5) and reliability (20.0 to 95.0) based on RNG
-            node_speed = round(rng.uniform(0.5, 1.5), 2)
-            node_reliability = round(rng.uniform(20.0, 95.0), 1)
+            # Deterministic speed (0.5 to 1.5) and reliability (20.0 to 95.0) based on dedicated attribute RNG
+            node_speed = round(attr_rng.uniform(0.5, 1.5), 2)
+            node_reliability = round(attr_rng.uniform(20.0, 95.0), 1)
             G.add_node(
                 node,
                 community=comm_idx,

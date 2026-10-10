@@ -13,11 +13,13 @@ from schemas import (
     NetworkGenerateResponse,
     SimulationRunRequest,
     SimulationRunResponse,
+    AntidoteSpreadRequest,
+    AntidoteSpreadResponse,
     InterventionCompareRequest,
     InterventionCompareResponse,
 )
 from network_generator import generate_network, dict_to_graph
-from spread_simulator import simulate_spread
+from spread_simulator import simulate_spread, simulate_antidote_spread
 from experiments import compare_strategies
 
 
@@ -116,6 +118,40 @@ def api_run_simulation(req: SimulationRunRequest) -> SimulationRunResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Simulation failed: {str(e)}"
+        )
+
+
+@app.post("/api/antidote/spread", response_model=AntidoteSpreadResponse, tags=["Antidote"])
+def api_spread_antidote(req: AntidoteSpreadRequest) -> AntidoteSpreadResponse:
+    """Probabilistically spread corrective Antidote information from a starting node."""
+    try:
+        graph = dict_to_graph(nodes=req.nodes, edges=req.edges)
+        if req.antidote_source not in graph:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Antidote source node {req.antidote_source} does not exist in the provided network."
+            )
+
+        result = simulate_antidote_spread(
+            graph=graph,
+            source=req.antidote_source,
+            probability=req.probability,
+            existing_antidote_states=req.existing_antidote_states,
+            seed=req.seed,
+            max_steps=req.max_steps
+        )
+        return AntidoteSpreadResponse(**result)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Antidote propagation failed: {str(e)}"
         )
 
 
